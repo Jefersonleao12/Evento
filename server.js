@@ -137,6 +137,8 @@ app.use('/api', (req, res, next) => {
   return requireAuth(req, res, next);
 });
 
+const EQUIPMENT_TYPES = ['ont', 'switch', 'access_point', 'roteador', 'outro'];
+
 /* ------------------------------------------------------------------ *
  * Upload da planta baixa (imagem de fundo do mapa)
  * ------------------------------------------------------------------ */
@@ -156,6 +158,33 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowed = /image\/(png|jpe?g|webp)/.test(file.mimetype);
     cb(allowed ? null : new Error('Formato de imagem não suportado (use PNG, JPG ou WEBP).'), allowed);
+  },
+});
+
+/* ------------------------------------------------------------------ *
+ * Upload de ícones customizados por tipo de equipamento
+ * ------------------------------------------------------------------ */
+const iconsDir = path.join(__dirname, 'public', 'uploads', 'icons');
+if (!fs.existsSync(iconsDir)) fs.mkdirSync(iconsDir, { recursive: true });
+
+const iconStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, iconsDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.png';
+    cb(null, `${req.params.type}-${Date.now()}${ext}`);
+  },
+});
+const uploadIcon = multer({
+  storage: iconStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB — ícone, não precisa de mais que isso
+  fileFilter: (req, file, cb) => {
+    if (!EQUIPMENT_TYPES.includes(req.params.type)) {
+      return cb(new Error('Tipo de equipamento inválido.'), false);
+    }
+    // SVG é servido apenas via <img src="...">, nunca inline no DOM, então é
+    // seguro mesmo que contenha <script> (o navegador não executa nesse caso).
+    const allowed = /image\/(png|jpe?g|webp|svg\+xml)/.test(file.mimetype);
+    cb(allowed ? null : new Error('Formato não suportado (use PNG, JPG, WEBP ou SVG).'), allowed);
   },
 });
 
@@ -230,7 +259,48 @@ app.get('/api/onts/:id/wifi-password', (req, res) => {
   res.json({ wifi_password: row.wifi_password || '' });
 });
 
-const EQUIPMENT_TYPES = ['ont', 'switch', 'access_point', 'roteador', 'outro'];
+/* ==================================================================== *
+ * ROTAS - ÍCONES CUSTOMIZADOS POR TIPO DE EQUIPAMENTO (admin apenas)
+ * ==================================================================== */
+
+// Retorna a URL do ícone customizado de cada tipo (null quando não houver,
+// caso em que o frontend usa o ícone padrão embutido).
+app.get('/api/equipment-icons', (req, res) => {
+  const icons = {};
+  for (const type of EQUIPMENT_TYPES) {
+    icons[type] = getSetting(`equipment_icon_${type}`) || null;
+  }
+  res.json(icons);
+});
+
+// Envia/substitui o ícone customizado de um tipo de equipamento. Admin apenas.
+app.post('/api/equipment-icons/:type', requireAdmin, (req, res, next) => {
+  if (!EQUIPMENT_TYPES.includes(req.params.type)) {
+    return res.status(400).json({ error: 'Tipo de equipamento inválido.' });
+  }
+  uploadIcon.single('icon')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || 'Falha no upload.' });
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+
+    const publicUrl = `/uploads/icons/${req.file.filename}`;
+    setSetting(`equipment_icon_${req.params.type}`, publicUrl);
+    res.json({ type: req.params.type, url: publicUrl });
+  });
+});
+
+// Remove o ícone customizado de um tipo, voltando a usar o padrão. Admin apenas.
+app.delete('/api/equipment-icons/:type', requireAdmin, (req, res) => {
+  if (!EQUIPMENT_TYPES.includes(req.params.type)) {
+    return res.status(400).json({ error: 'Tipo de equipamento inválido.' });
+  }
+  const currentUrl = getSetting(`equipment_icon_${req.params.type}`);
+  if (currentUrl) {
+    const filePath = path.join(__dirname, 'public', currentUrl.replace(/^\//, ''));
+    fs.unlink(filePath, () => {}); // best-effort; não bloqueia a resposta se falhar
+  }
+  setSetting(`equipment_icon_${req.params.type}`, '');
+  res.json({ ok: true });
+});
 
 // Cria um novo equipamento (chamado ao clicar no mapa + preencher o formulário). Admin apenas.
 app.post('/api/onts', requireAdmin, (req, res) => {

@@ -102,6 +102,11 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
         <span class="hidden sm:inline">Planta</span>
       </button>
+      <button id="btn-icons" title="Ícones dos equipamentos"
+        class="admin-only px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span class="hidden sm:inline">Ícones</span>
+      </button>
       <button id="btn-list" title="Listar ONTs"
         class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -223,6 +228,25 @@
               class="flex-1 px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold">Salvar</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: ÍCONES DOS EQUIPAMENTOS (admin) -->
+  <!-- ============================================================= -->
+  <div id="icons-modal" class="fixed inset-0 z-[1100] hidden">
+    <div class="absolute inset-0 bg-black/60" data-close-icons></div>
+    <div class="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+      <div class="bg-slate-800 w-full sm:w-[440px] sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto border border-slate-700 shadow-2xl">
+        <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+          <h2 class="font-semibold text-sm">Ícones dos Equipamentos</h2>
+          <button data-close-icons class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div class="p-4 space-y-2">
+          <p class="text-[11px] text-slate-500 pb-1">Envie uma imagem (PNG, JPG, WEBP ou SVG, até 2MB) para cada tipo de equipamento. Ela substitui o ícone padrão em todos os marcadores desse tipo no mapa.</p>
+          <div id="icons-list" class="space-y-2"></div>
+        </div>
       </div>
     </div>
   </div>

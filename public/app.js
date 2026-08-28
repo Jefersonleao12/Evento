@@ -40,6 +40,7 @@
     movingOntId: null, // id do equipamento atualmente em modo "mover no mapa"
     autoRefreshTimer: null,
     relativeTimeTimer: null,
+    customIcons: {}, // equipment_type -> URL do ícone customizado (upload do admin)
   };
 
   const DEFAULT_OSM_CENTER = [-15.793889, -47.882778]; // Brasília, ajuste conforme o local do evento
@@ -75,6 +76,16 @@
     roteador: 'Roteador',
     outro: 'Outro',
   };
+
+  // Retorna o HTML do ícone de um tipo de equipamento: o ícone customizado
+  // enviado pelo admin (se houver), senão o ícone padrão embutido.
+  function equipmentIconHtml(type, sizePx = 18) {
+    const customUrl = state.customIcons[type];
+    if (customUrl) {
+      return `<img src="${customUrl}" alt="" style="width:${sizePx}px;height:${sizePx}px;object-fit:contain;vertical-align:middle;" />`;
+    }
+    return EQUIPMENT_ICONS[type] || EQUIPMENT_ICONS.ont;
+  }
 
   /* ------------------------------------------------------------------ *
    * Helpers de DOM
@@ -163,6 +174,7 @@
     $('#app-shell').classList.remove('hidden');
     $('#current-username').textContent = state.currentUser.username;
     applyRoleVisibility();
+    await loadEquipmentIcons();
 
     if (!state.map) {
       await initMap();
@@ -311,7 +323,7 @@
 
   function markerIcon(ont) {
     const statusClass = `status-${ont.status || 'unknown'}`;
-    const icon = EQUIPMENT_ICONS[ont.equipment_type] || EQUIPMENT_ICONS.ont;
+    const icon = equipmentIconHtml(ont.equipment_type, 18);
     const label = ont.nome_fantasia ? escapeHtml(ont.nome_fantasia) : '';
     const draggingClass = state.movingOntId === ont.id ? 'dragging' : '';
     return L.divIcon({
@@ -456,7 +468,7 @@
     // innerHTML (não textContent) porque o ícone do tipo ONT é um SVG embutido;
     // tag_label vem de entrada do usuário, por isso passa por escapeHtml().
     $('#d-title').innerHTML =
-      `<span class="inline-flex items-center align-middle">${EQUIPMENT_ICONS[ont.equipment_type] || ''}</span> ${escapeHtml(ont.tag_label)}`.trim();
+      `<span class="inline-flex items-center align-middle">${equipmentIconHtml(ont.equipment_type, 16)}</span> ${escapeHtml(ont.tag_label)}`.trim();
     $('#d-nome-fantasia').textContent = ont.nome_fantasia || '';
     $('#d-status-dot').className =
       'w-2.5 h-2.5 rounded-full shrink-0 ' +
@@ -672,6 +684,88 @@
   }
 
   /* ==================================================================== *
+   * ÍCONES CUSTOMIZADOS POR TIPO DE EQUIPAMENTO (somente admin)
+   * ==================================================================== */
+
+  async function loadEquipmentIcons() {
+    try {
+      state.customIcons = await api('/api/equipment-icons');
+    } catch (_) {
+      state.customIcons = {};
+    }
+  }
+
+  function openIconsModal() {
+    if (!isAdmin()) return;
+    renderIconsList();
+    $('#icons-modal').classList.remove('hidden');
+  }
+
+  function closeIconsModal() {
+    $('#icons-modal').classList.add('hidden');
+  }
+
+  function renderIconsList() {
+    const types = Object.keys(EQUIPMENT_LABELS);
+    $('#icons-list').innerHTML = types
+      .map((type) => {
+        const hasCustom = Boolean(state.customIcons[type]);
+        return `
+        <div class="bg-slate-900 rounded-lg p-3 flex items-center gap-3" data-icon-row="${type}">
+          <div class="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center shrink-0 text-white">
+            ${equipmentIconHtml(type, 20)}
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium">${escapeHtml(EQUIPMENT_LABELS[type])}</p>
+            <p class="text-[11px] text-slate-500">${hasCustom ? 'Ícone customizado' : 'Usando ícone padrão'}</p>
+          </div>
+          <label class="text-[11px] px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 cursor-pointer shrink-0">
+            Enviar
+            <input type="file" data-icon-upload="${type}" accept="image/png,image/jpeg,image/webp,image/svg+xml" class="hidden" />
+          </label>
+          ${hasCustom ? `<button type="button" data-icon-reset="${type}" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-red-900/60 hover:bg-red-900 text-red-200 shrink-0">Restaurar</button>` : ''}
+        </div>`;
+      })
+      .join('');
+
+    $$('#icons-list [data-icon-upload]').forEach((input) => {
+      input.addEventListener('change', (e) => handleIconUpload(input.dataset.iconUpload, e.target.files[0]));
+    });
+    $$('#icons-list [data-icon-reset]').forEach((btn) => {
+      btn.addEventListener('click', () => handleIconReset(btn.dataset.iconReset));
+    });
+  }
+
+  async function handleIconUpload(type, file) {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('icon', file);
+    try {
+      const res = await fetch(`/api/equipment-icons/${type}`, { method: 'POST', body: formData });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || 'Falha no upload.');
+      state.customIcons[type] = body.url;
+      showToast(`Ícone de ${EQUIPMENT_LABELS[type]} atualizado.`);
+      renderIconsList();
+      renderMarkers();
+    } catch (err) {
+      showToast('Erro ao enviar ícone: ' + err.message, true);
+    }
+  }
+
+  async function handleIconReset(type) {
+    try {
+      await api(`/api/equipment-icons/${type}`, { method: 'DELETE' });
+      delete state.customIcons[type];
+      showToast(`Ícone de ${EQUIPMENT_LABELS[type]} restaurado ao padrão.`);
+      renderIconsList();
+      renderMarkers();
+    } catch (err) {
+      showToast('Erro ao restaurar ícone: ' + err.message, true);
+    }
+  }
+
+  /* ==================================================================== *
    * PAINEL DE LISTAGEM
    * ==================================================================== */
 
@@ -702,7 +796,7 @@
         (o) => `
       <li data-id="${o.id}" class="cursor-pointer bg-slate-900 hover:bg-slate-700/60 rounded-lg p-3 flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <p class="font-medium truncate">${EQUIPMENT_ICONS[o.equipment_type] || ''} ${escapeHtml(o.tag_label)}${o.nome_fantasia ? ' — ' + escapeHtml(o.nome_fantasia) : ''}</p>
+          <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 14)} ${escapeHtml(o.tag_label)}${o.nome_fantasia ? ' — ' + escapeHtml(o.nome_fantasia) : ''}</p>
           <p class="text-[11px] text-slate-500 truncate">${escapeHtml(o.asset_number || 'sem patrimônio')} • ${escapeHtml(o.mac_address || 'sem MAC')} • ${escapeHtml(timeAgo(o.last_checked_at) || 'nunca verificado')}</p>
         </div>
         <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[o.status] || dotClass.unknown}"></span>
@@ -740,6 +834,8 @@
     $$('[data-close-modal]').forEach((el) => el.addEventListener('click', closeFormModal));
     $$('[data-close-drawer]').forEach((el) => el.addEventListener('click', closeDrawer));
     $$('[data-close-list]').forEach((el) => el.addEventListener('click', closeListPanel));
+    $$('[data-close-icons]').forEach((el) => el.addEventListener('click', closeIconsModal));
+    $('#btn-icons').addEventListener('click', openIconsModal);
 
     $('#ont-form').addEventListener('submit', handleFormSubmit);
 
