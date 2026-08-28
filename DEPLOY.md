@@ -31,12 +31,16 @@ scp -r ont-event-manager usuario@SEU_IP:/home/usuario/
 
 # Na VPS:
 cd /home/usuario/ont-event-manager
-npm install --omit=dev
+npm install
 cp .env.example .env
-nano .env   # preencha IXC_BASE_URL, IXC_TOKEN e a PORT desejada (ex: 3000)
+nano .env   # preencha IXC_BASE_URL, IXC_TOKEN, SESSION_SECRET, ADMIN_USERNAME/ADMIN_PASSWORD e a PORT desejada (ex: 3000)
 ```
 
 > `better-sqlite3` compila um módulo nativo durante o `npm install` — por isso o pacote `build-essential` foi instalado no passo 1.
+>
+> Usamos `npm install` (não `--omit=dev`) porque o Tailwind CSS é compilado localmente a partir do CSS-fonte via `postinstall` (script `build:css`, que usa a dependência de desenvolvimento `tailwindcss`) e gera `public/styles.css` — evitando depender do CDN do Tailwind em produção. Se só quiser reinstalar dependências de produção depois do build inicial, rode `npm install --omit=dev` normalmente; nesse caso gere/atualize o CSS manualmente com `npm run build:css` antes.
+>
+> **Importante:** troque `ADMIN_PASSWORD` no `.env` antes de subir para produção — esse usuário é criado automaticamente na primeira execução (usuário "admin" com a senha "admin123" se a variável não for definida).
 
 ## 3. Subir a aplicação com PM2
 
@@ -141,13 +145,16 @@ sudo certbot renew --dry-run   # simula a renovação, sem alterar nada
 - [ ] Variáveis `IXC_BASE_URL` e `IXC_TOKEN` preenchidas no `.env` (ou configuradas via tela de Configurações da aplicação).
 - [ ] Botão "Consultar status no IXC" retorna Online/Offline corretamente para uma ONT de teste.
 - [ ] Backup do arquivo `data/onts.db` incluído na rotina de backup da VPS (é o banco SQLite com todo o cadastro).
+- [ ] Login funcionando com o usuário admin definido em `ADMIN_USERNAME`/`ADMIN_PASSWORD` e a senha padrão trocada.
+- [ ] `SESSION_SECRET` definido com um valor aleatório forte (não deixe o padrão de desenvolvimento).
+- [ ] Criado ao menos um usuário "viewer" (se aplicável) para a equipe do evento que só precisa consultar o mapa — pode ser inserido diretamente no SQLite (tabela `users`) com uma senha em hash bcrypt, já que ainda não há tela de gestão de usuários.
 
 ## 7. Atualizando a aplicação no futuro
 
 ```bash
 cd /home/usuario/ont-event-manager
 git pull            # ou reenvie os arquivos atualizados via scp/rsync
-npm install --omit=dev
+npm install
 pm2 restart ont-event-manager
 ```
 

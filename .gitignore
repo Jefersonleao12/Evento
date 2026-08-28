@@ -3,5 +3,6 @@ data/
 .env
 public/uploads/*
 !public/uploads/.gitkeep
+public/styles.css
 npm-debug.log*
 .DS_Store

@@ -96,10 +96,18 @@ async function checkOntStatus(ixcLoginId, config = {}) {
     // O campo "ativo" / "status" varia conforme a versão do IXC.
     // Muitas instalações expõem "status" = 'Ativo' e um campo separado
     // indicando se a sessão radius está online (ex.: "online" = 'S'/'N').
-    const isOnline =
-      registro.online === 'S' ||
-      registro.status_conexao === 'online' ||
-      registro.ativo === 'S' && registro.online === 'S';
+    //
+    // Correção: a condição anterior era
+    //   `registro.online === 'S' || registro.status_conexao === 'online' || registro.ativo === 'S' && registro.online === 'S'`
+    // que, por precedência de operadores, equivale a
+    //   `online === 'S' || status_conexao === 'online' || (ativo === 'S' && online === 'S')`
+    // — a 3ª cláusula nunca influenciava o resultado, pois já era coberta
+    // pela 1ª. Isso permitia marcar como "online" um login cujo cadastro
+    // esteja desativado no IXC (ex.: sessão radius presa/stale após o
+    // cancelamento do contrato). Agora `ativo` funciona como um portão
+    // real: só é online se o cadastro está ativo E há sinal de sessão.
+    const hasOnlineSignal = registro.online === 'S' || registro.status_conexao === 'online';
+    const isOnline = registro.ativo !== 'N' && hasOnlineSignal;
 
     return {
       status: isOnline ? 'online' : 'offline',
