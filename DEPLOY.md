@@ -158,6 +158,19 @@ npm install
 pm2 restart ont-event-manager
 ```
 
+## Sobre a otimização da planta baixa
+
+A imagem da planta baixa é redimensionada e comprimida automaticamente no
+upload (biblioteca `sharp`, dependência de produção — instalada normalmente
+pelo `npm install`, sem passo extra). O maior lado fica limitado a 2400px e
+o arquivo é convertido para WebP, o que reduz bastante o tempo de download
+e o custo de decodificar/redesenhar a imagem a cada zoom/pan — especialmente
+importante no celular.
+
+Se você já tinha uma planta baixa carregada **antes** dessa atualização,
+ela continua no tamanho original (grande) até você reenviá-la pela tela de
+"Planta" — vale a pena fazer isso uma vez após atualizar o servidor.
+
 ## Notas sobre a API do IXC Provedor
 
 - O endpoint usado por padrão em `ixcClient.js` é `/webservice/v1/radusuarios`, comum em instalações IXC para consultar logins PPPoE/rádio e seu status de sessão online. **Confirme o endpoint e os nomes de campo exatos com a documentação/suporte do seu IXC**, pois podem variar entre versões (alguns provedores expõem também `/webservice/v1/su_oltonu` para dados específicos de ONU na OLT).

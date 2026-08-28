@@ -153,6 +153,12 @@
     <!-- ============================================================= -->
     <main class="fixed inset-0 pt-[52px]">
       <div id="map"></div>
+      <div id="map-loading" class="hidden pointer-events-none absolute inset-0 top-[52px] z-[950] flex items-center justify-center bg-slate-900/70">
+        <div class="flex items-center gap-2 bg-slate-900/90 border border-slate-700 rounded-full px-4 py-2 text-xs text-slate-300">
+          <svg class="w-4 h-4 animate-spin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M12 3a9 9 0 100 18 9 9 0 000-18z" opacity=".25"/><path stroke-linecap="round" d="M12 3a9 9 0 019 9"/></svg>
+          Carregando planta baixa...
+        </div>
+      </div>
       <p id="map-hint" class="admin-only hidden pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 z-[900] bg-slate-900/90 border border-slate-700 text-[11px] px-3 py-1.5 rounded-full text-slate-300">
         Toque em qualquer ponto do mapa para cadastrar um novo equipamento
       </p>

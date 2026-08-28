@@ -264,7 +264,10 @@
 
     // Bounds da imagem: [[y0,x0],[y1,x1]] — em CRS.Simple, lat=y e lng=x.
     const bounds = [[0, 0], [height, width]];
-    L.imageOverlay(url, bounds).addTo(state.map);
+    const overlay = L.imageOverlay(url, bounds).addTo(state.map);
+    $('#map-loading')?.classList.remove('hidden');
+    overlay.once('load', () => $('#map-loading')?.classList.add('hidden'));
+    overlay.once('error', () => $('#map-loading')?.classList.add('hidden'));
     state.map.fitBounds(bounds);
     // Permite um pouco de "respiro" ao redor da planta baixa para facilitar o pan/zoom.
     const padding = Math.max(width, height) * 0.25;

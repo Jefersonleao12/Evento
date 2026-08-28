@@ -24,9 +24,11 @@ const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const sharp = require('sharp');
 
 const { db, initDatabase, getSetting, setSetting, findUserByUsername } = require('./database');
 const ixcClient = require('./ixcClient');
@@ -45,6 +47,7 @@ if (!process.env.SESSION_SECRET) {
  * Middlewares gerais
  * ------------------------------------------------------------------ */
 app.set('trust proxy', 1); // necessário atrás do Nginx para cookies "secure" e rate limit corretos
+app.use(compression()); // gzip nas respostas (JSON/HTML/CSS/JS) — ajuda bastante em rede de evento/4G
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -63,6 +66,14 @@ app.use(
   })
 );
 
+// Cache agressivo para uploads (planta baixa, ícones): os nomes de arquivo
+// já incluem timestamp, então um arquivo nunca muda de conteúdo sob o
+// mesmo nome — o navegador pode guardar em cache por bastante tempo,
+// evitando rebaixar a planta baixa inteira a cada visita/refresh.
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads'), {
+  maxAge: '30d',
+  immutable: true,
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ------------------------------------------------------------------ *
@@ -212,20 +223,51 @@ app.get('/api/floorplan', (req, res) => {
 // Upload de uma nova imagem de planta baixa (admin).
 // Espera também "width" e "height" (dimensões naturais da imagem em px)
 // enviados pelo frontend, usados para configurar o CRS.Simple do Leaflet.
-app.post('/api/floorplan', requireAdmin, upload.single('floorplan'), (req, res) => {
+// Dimensão máxima (maior lado) da planta baixa depois de otimizada. Plantas
+// enviadas em resolução de foto/scan (vários milhares de pixels) ficavam
+// lentas para baixar e para o navegador decodificar/redesenhar a cada
+// zoom/pan — especialmente no celular. 2400px é nítido o suficiente para
+// esse uso e reduz drasticamente o tamanho do arquivo.
+const FLOORPLAN_MAX_DIMENSION = 2400;
+
+app.post('/api/floorplan', requireAdmin, upload.single('floorplan'), async (req, res, next) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
   }
-  const publicUrl = `/uploads/${req.file.filename}`;
-  setSetting('floorplan_url', publicUrl);
-  if (req.body.width) setSetting('floorplan_width', req.body.width);
-  if (req.body.height) setSetting('floorplan_height', req.body.height);
 
-  res.json({
-    url: publicUrl,
-    width: req.body.width ? Number(req.body.width) : null,
-    height: req.body.height ? Number(req.body.height) : null,
-  });
+  const originalPath = req.file.path;
+  const optimizedFilename = `floorplan-${Date.now()}.webp`;
+  const optimizedPath = path.join(uploadsDir, optimizedFilename);
+
+  try {
+    // .rotate() sem argumentos aplica a orientação gravada no EXIF (comum em
+    // fotos tiradas direto do celular), evitando planta baixa "deitada".
+    const info = await sharp(originalPath)
+      .rotate()
+      .resize({
+        width: FLOORPLAN_MAX_DIMENSION,
+        height: FLOORPLAN_MAX_DIMENSION,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: 85 })
+      .toFile(optimizedPath);
+
+    fs.unlink(originalPath, () => {}); // não precisamos mais do arquivo original (grande)
+
+    const publicUrl = `/uploads/${optimizedFilename}`;
+    setSetting('floorplan_url', publicUrl);
+    // Usa as dimensões REAIS do arquivo já otimizado (não o que o navegador
+    // mediu do original) — é isso que o Leaflet usa para os bounds do
+    // CRS.Simple, então precisa bater com o arquivo que será servido.
+    setSetting('floorplan_width', String(info.width));
+    setSetting('floorplan_height', String(info.height));
+
+    res.json({ url: publicUrl, width: info.width, height: info.height });
+  } catch (err) {
+    fs.unlink(originalPath, () => {});
+    next(err);
+  }
 });
 
 /* ==================================================================== *
