@@ -46,8 +46,23 @@
   const DEFAULT_OSM_ZOOM = 18;
   const AUTO_REFRESH_MS = 60 * 1000; // auto-atualização do status via IXC
 
+  // Ícone de roteador (duas antenas) usado para equipamentos do tipo ONT,
+  // no lugar do emoji genérico — SVG embutido para não depender de arquivo
+  // externo nem de rede.
+  const ONT_ROUTER_ICON = `
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="12.5" x2="8" y2="5.5"></line>
+      <line x1="16" y1="12.5" x2="16" y2="5.5"></line>
+      <circle cx="8" cy="4.5" r="1"></circle>
+      <circle cx="16" cy="4.5" r="1"></circle>
+      <rect x="3" y="12.5" width="18" height="7" rx="1.5"></rect>
+      <line x1="6.5" y1="16" x2="9" y2="16"></line>
+      <line x1="11.5" y1="16" x2="17.5" y2="16"></line>
+    </svg>`;
+
   const EQUIPMENT_ICONS = {
-    ont: '📡',
+    ont: ONT_ROUTER_ICON,
     switch: '🔀',
     access_point: '📶',
     roteador: '🌐',
@@ -438,7 +453,10 @@
     if (!ont) return;
     state.activeOntId = ontId;
 
-    $('#d-title').textContent = `${EQUIPMENT_ICONS[ont.equipment_type] || ''} ${ont.tag_label}`.trim();
+    // innerHTML (não textContent) porque o ícone do tipo ONT é um SVG embutido;
+    // tag_label vem de entrada do usuário, por isso passa por escapeHtml().
+    $('#d-title').innerHTML =
+      `<span class="inline-flex items-center align-middle">${EQUIPMENT_ICONS[ont.equipment_type] || ''}</span> ${escapeHtml(ont.tag_label)}`.trim();
     $('#d-nome-fantasia').textContent = ont.nome_fantasia || '';
     $('#d-status-dot').className =
       'w-2.5 h-2.5 rounded-full shrink-0 ' +
