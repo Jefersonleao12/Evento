@@ -323,19 +323,30 @@
 
   function markerIcon(ont) {
     const statusClass = `status-${ont.status || 'unknown'}`;
-    const icon = equipmentIconHtml(ont.equipment_type, 18);
     const label = ont.nome_fantasia ? escapeHtml(ont.nome_fantasia) : '';
     const draggingClass = state.movingOntId === ont.id ? 'dragging' : '';
+    const customUrl = state.customIcons[ont.equipment_type];
+
+    // Ícone customizado (foto enviada pelo admin): sem o anel/borda branca
+    // padrão, só a imagem em boa proporção, com um badge de status no canto.
+    const iconMarkup = customUrl
+      ? `
+        <div class="ont-marker-photo-wrap ${draggingClass}">
+          <div class="ont-marker-photo"><img src="${customUrl}" alt="" /></div>
+          <span class="ont-status-dot ${statusClass}"></span>
+        </div>`
+      : `<div class="ont-marker ${statusClass} ${draggingClass}">${equipmentIconHtml(ont.equipment_type, 18)}</div>`;
+
     return L.divIcon({
       className: '',
       html: `
         <div class="ont-marker-wrap">
-          <div class="ont-marker ${statusClass} ${draggingClass}">${icon}</div>
+          ${iconMarkup}
           ${label ? `<div class="ont-marker-label">${label}</div>` : ''}
         </div>`,
-      iconSize: [110, label ? 56 : 34],
-      iconAnchor: [55, 17],
-      popupAnchor: [0, -17],
+      iconSize: [110, label ? (customUrl ? 62 : 56) : (customUrl ? 40 : 34)],
+      iconAnchor: [55, customUrl ? 20 : 17],
+      popupAnchor: [0, customUrl ? -20 : -17],
     });
   }
 
