@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Painel de ONTs - Gestão de Evento</title>
+
+<!-- Tailwind CSS (CDN) -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- Leaflet.js (mapa interativo) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  /* Ajustes finos que o Tailwind via CDN não cobre facilmente */
+  html, body { height: 100%; margin: 0; overscroll-behavior: none; }
+  #map { height: 100%; width: 100%; background: #0f172a; }
+  .leaflet-container { background: #0f172a; }
+
+  /* Marcador customizado das ONTs */
+  .ont-marker {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 9999px;
+    border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,.4);
+    color: white; font-size: 11px; font-weight: 700;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+  }
+  .ont-marker.status-online  { background-color: #16a34a; }
+  .ont-marker.status-offline { background-color: #dc2626; }
+  .ont-marker.status-unknown { background-color: #6b7280; }
+
+  /* Painel lateral / drawer inferior (mobile-first) */
+  #drawer, #form-modal {
+    transition: transform .25s ease-in-out;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+</style>
+</head>
+
+<body class="bg-slate-900 text-slate-100 font-sans">
+
+  <!-- ============================================================= -->
+  <!-- CABEÇALHO -->
+  <!-- ============================================================= -->
+  <header class="fixed top-0 inset-x-0 z-[1000] bg-slate-900/95 backdrop-blur border-b border-slate-700 px-3 py-2 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2 min-w-0">
+      <div class="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center font-bold text-slate-900 shrink-0">ON</div>
+      <div class="min-w-0">
+        <h1 class="text-sm font-semibold truncate">Painel de ONTs — Evento</h1>
+        <p id="stats-line" class="text-[11px] text-slate-400 truncate">carregando...</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-1.5 shrink-0">
+      <button id="btn-refresh-status" title="Atualizar status via IXC"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0114-4.5M20 15a8 8 0 01-14 4.5"/></svg>
+        <span class="hidden sm:inline">IXC</span>
+      </button>
+      <button id="btn-upload-plant" title="Carregar planta baixa"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L7 9m5-5l5 5M5 20h14"/></svg>
+        <span class="hidden sm:inline">Planta</span>
+      </button>
+      <button id="btn-list" title="Listar ONTs"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+  </header>
+  <input type="file" id="plant-file-input" accept="image/png,image/jpeg,image/webp" class="hidden" />
+
+  <!-- ============================================================= -->
+  <!-- LEGENDA DE STATUS -->
+  <!-- ============================================================= -->
+  <div class="fixed z-[999] top-[52px] left-2 bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] flex items-center gap-3">
+    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>Online</span>
+    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span>Offline</span>
+    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-gray-500 inline-block"></span>Sem dados</span>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MAPA -->
+  <!-- ============================================================= -->
+  <main class="fixed inset-0 pt-[52px]">
+    <div id="map"></div>
+    <p id="map-hint" class="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 z-[900] bg-slate-900/90 border border-slate-700 text-[11px] px-3 py-1.5 rounded-full text-slate-300">
+      Toque em qualquer ponto do mapa para cadastrar uma nova ONT
+    </p>
+  </main>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: CADASTRO / EDIÇÃO DE ONT -->
+  <!-- ============================================================= -->
+  <div id="form-modal" class="fixed inset-0 z-[1100] hidden">
+    <div class="absolute inset-0 bg-black/60" data-close-modal></div>
+    <div class="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+      <div class="bg-slate-800 w-full sm:w-[440px] sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto border border-slate-700 shadow-2xl">
+        <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+          <h2 id="form-title" class="font-semibold text-sm">Cadastrar ONT</h2>
+          <button data-close-modal class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+
+        <form id="ont-form" class="p-4 space-y-3">
+          <input type="hidden" id="f-id" />
+          <input type="hidden" id="f-pos-x" />
+          <input type="hidden" id="f-pos-y" />
+
+          <div>
+            <label class="text-xs text-slate-400">Etiqueta / Nº de Localização *</label>
+            <input required id="f-tag" type="text" placeholder="Ex: ONT-014"
+              class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-400">Patrimônio do Equipamento</label>
+            <input id="f-asset" type="text" placeholder="Ex: PAT-00231"
+              class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-400">Endereço MAC</label>
+            <input id="f-mac" type="text" placeholder="AA:BB:CC:DD:EE:FF"
+              class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs text-slate-400">Nome da Rede Wi-Fi (SSID)</label>
+              <input id="f-ssid" type="text" placeholder="Evento_5G"
+                class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">Senha do Wi-Fi</label>
+              <input id="f-password" type="text" placeholder="********"
+                class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-400">ID / Login no IXC</label>
+            <input id="f-ixc" type="text" placeholder="Login usado no IXC Provedor"
+              class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-400">Observações</label>
+            <textarea id="f-notes" rows="2" placeholder="Notas adicionais (opcional)"
+              class="mt-1 w-full rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+          </div>
+
+          <p class="text-[11px] text-slate-500">Coordenadas: <span id="f-coords-preview">-</span></p>
+
+          <div class="flex gap-2 pt-2 pb-1">
+            <button type="button" data-close-modal
+              class="flex-1 px-3 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-sm font-medium">Cancelar</button>
+            <button type="submit"
+              class="flex-1 px-3 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-sm font-semibold">Salvar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- DRAWER: DETALHES DA ONT (ao clicar no marcador) -->
+  <!-- ============================================================= -->
+  <div id="drawer" class="fixed inset-0 z-[1050] hidden">
+    <div class="absolute inset-0 bg-black/50" data-close-drawer></div>
+    <div class="absolute inset-x-0 bottom-0 sm:right-0 sm:top-0 sm:inset-x-auto sm:h-full sm:w-[380px] bg-slate-800 border-t sm:border-t-0 sm:border-l border-slate-700 rounded-t-2xl sm:rounded-none max-h-[85vh] sm:max-h-none overflow-y-auto shadow-2xl">
+      <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span id="d-status-dot" class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
+          <h2 id="d-title" class="font-semibold text-sm">ONT</h2>
+        </div>
+        <button data-close-drawer class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+
+      <div class="p-4 space-y-3 text-sm">
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-slate-900 rounded-lg p-2.5">
+            <p class="text-[10px] text-slate-500 uppercase">Patrimônio</p>
+            <p id="d-asset" class="truncate">-</p>
+          </div>
+          <div class="bg-slate-900 rounded-lg p-2.5">
+            <p class="text-[10px] text-slate-500 uppercase">Status</p>
+            <p id="d-status-text" class="truncate">-</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 rounded-lg p-2.5">
+          <p class="text-[10px] text-slate-500 uppercase">MAC</p>
+          <p id="d-mac" class="font-mono">-</p>
+        </div>
+
+        <div class="bg-slate-900 rounded-lg p-2.5 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-[10px] text-slate-500 uppercase">Wi-Fi (SSID)</p>
+            <p id="d-ssid" class="truncate">-</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 rounded-lg p-2.5 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-[10px] text-slate-500 uppercase">Senha Wi-Fi</p>
+            <p id="d-password" class="truncate font-mono">-</p>
+          </div>
+          <button id="btn-toggle-password" class="text-[11px] px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 shrink-0">mostrar</button>
+        </div>
+
+        <div class="bg-slate-900 rounded-lg p-2.5">
+          <p class="text-[10px] text-slate-500 uppercase">Login IXC</p>
+          <p id="d-ixc" class="truncate">-</p>
+        </div>
+
+        <div class="bg-slate-900 rounded-lg p-2.5" id="d-notes-wrap">
+          <p class="text-[10px] text-slate-500 uppercase">Observações</p>
+          <p id="d-notes" class="text-slate-300 whitespace-pre-wrap">-</p>
+        </div>
+
+        <p id="d-last-check" class="text-[11px] text-slate-500">-</p>
+
+        <!-- Ações rápidas -->
+        <div class="pt-2 space-y-2">
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btn-mark-online" class="px-3 py-2 rounded-lg bg-emerald-700/40 hover:bg-emerald-700/60 border border-emerald-700 text-emerald-300 text-xs font-medium">Marcar Online</button>
+            <button id="btn-mark-offline" class="px-3 py-2 rounded-lg bg-red-700/40 hover:bg-red-700/60 border border-red-700 text-red-300 text-xs font-medium">Marcar Offline</button>
+          </div>
+          <button id="btn-check-ixc" class="w-full px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-medium flex items-center justify-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0114-4.5M20 15a8 8 0 01-14 4.5"/></svg>
+            Consultar status no IXC
+          </button>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <button id="btn-edit" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-medium">Editar</button>
+            <button id="btn-delete" class="px-3 py-2 rounded-lg bg-red-900/60 hover:bg-red-900 text-red-200 text-xs font-medium">Remover</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- PAINEL: LISTA DE ONTs -->
+  <!-- ============================================================= -->
+  <div id="list-panel" class="fixed inset-0 z-[1050] hidden">
+    <div class="absolute inset-0 bg-black/50" data-close-list></div>
+    <div class="absolute inset-x-0 bottom-0 sm:right-0 sm:top-0 sm:inset-x-auto sm:h-full sm:w-[380px] bg-slate-800 border-t sm:border-t-0 sm:border-l border-slate-700 rounded-t-2xl sm:rounded-none max-h-[85vh] sm:max-h-none overflow-y-auto shadow-2xl">
+      <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+        <h2 class="font-semibold text-sm">Todas as ONTs</h2>
+        <button data-close-list class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <input id="list-search" type="text" placeholder="Buscar por etiqueta, MAC ou patrimônio..."
+        class="mx-4 mt-3 mb-1 rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm w-[calc(100%-2rem)] focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+      <ul id="list-items" class="p-4 pt-2 space-y-2 text-sm"></ul>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- TOAST (feedback rápido) -->
+  <!-- ============================================================= -->
+  <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[1200] hidden bg-slate-800 border border-slate-600 text-xs px-4 py-2 rounded-full shadow-lg"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

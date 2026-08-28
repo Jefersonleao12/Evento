@@ -1,0 +1,33 @@
+{
+  "name": "ont-event-manager",
+  "version": "1.0.0",
+  "description": "Painel interativo de gestão visual de ONTs para eventos técnicos, com mapa (Leaflet), CRUD de equipamentos e integração com a API do IXC Provedor.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "ixc",
+    "ont",
+    "isp",
+    "mapa",
+    "evento",
+    "leaflet"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "multer": "^2.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
