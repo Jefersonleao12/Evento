@@ -36,6 +36,8 @@
     onts: [],
     activeOntId: null,
     pendingClickLatLng: null, // ponto clicado aguardando confirmação no formulário
+    pendingFixedPos: null, // posição travada ao adicionar equipamento no mesmo local de outro já existente
+    activePickerPos: null, // posição do grupo atualmente aberto no seletor de equipamentos empilhados
     currentUser: null, // { id, username, role }
     movingOntId: null, // id do equipamento atualmente em modo "mover no mapa"
     autoRefreshTimer: null,
@@ -444,6 +446,10 @@
     let pos;
     if (isEdit) {
       pos = { pos_x: ont.pos_x, pos_y: ont.pos_y };
+    } else if (state.pendingFixedPos) {
+      // Veio do botão "Adicionar equipamento neste local" — usa a mesma
+      // posição de um equipamento já existente (não um clique no mapa).
+      pos = state.pendingFixedPos;
     } else if (state.pendingClickLatLng) {
       pos = latLngToPos(state.pendingClickLatLng);
     } else {
@@ -459,7 +465,20 @@
   function closeFormModal() {
     $('#form-modal').classList.add('hidden');
     state.pendingClickLatLng = null;
+    state.pendingFixedPos = null;
     $('#ont-form').reset();
+  }
+
+  // Abre o formulário de cadastro travado numa posição específica (mesmo
+  // ponto de um equipamento já existente) — usado pelos botões "Adicionar
+  // equipamento neste local", tanto no drawer quanto no seletor de
+  // equipamentos empilhados.
+  function openFormModalAtPosition(pos) {
+    if (!isAdmin()) return;
+    state.pendingFixedPos = pos;
+    closeDrawer();
+    closeEquipmentPicker();
+    openFormModal(null);
   }
 
   async function handleFormSubmit(e) {
@@ -502,6 +521,7 @@
    * ==================================================================== */
 
   function openEquipmentPicker(group) {
+    state.activePickerPos = { pos_x: group[0].pos_x, pos_y: group[0].pos_y };
     const dotClass = { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500' };
     $('#picker-items').innerHTML = group
       .map(
@@ -929,6 +949,13 @@
     $('#btn-check-ixc').addEventListener('click', checkActiveOntOnIxc);
     $('#btn-toggle-password').addEventListener('click', togglePasswordVisibility);
     $('#btn-toggle-move').addEventListener('click', toggleMoveActiveOnt);
+    $('#btn-add-here').addEventListener('click', () => {
+      const ont = state.onts.find((o) => o.id === state.activeOntId);
+      if (ont) openFormModalAtPosition({ pos_x: ont.pos_x, pos_y: ont.pos_y });
+    });
+    $('#btn-picker-add-here').addEventListener('click', () => {
+      if (state.activePickerPos) openFormModalAtPosition(state.activePickerPos);
+    });
 
     $('#btn-refresh-status').addEventListener('click', () => checkAllOnIxc(false));
     $('#btn-upload-plant').addEventListener('click', () => $('#plant-file-input').click());

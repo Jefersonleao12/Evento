@@ -299,6 +299,12 @@
           <button data-close-picker class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
         </div>
         <ul id="picker-items" class="p-4 space-y-2 text-sm"></ul>
+        <div class="admin-only hidden px-4 pb-4">
+          <button id="btn-picker-add-here" class="w-full px-3 py-2 rounded-lg bg-emerald-700/30 hover:bg-emerald-700/50 border border-emerald-700 text-emerald-300 text-xs font-medium flex items-center justify-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Adicionar outro equipamento aqui
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -382,6 +388,10 @@
           <button id="btn-toggle-move" class="admin-only hidden w-full px-3 py-2 rounded-lg bg-amber-700/30 hover:bg-amber-700/50 border border-amber-700 text-amber-300 text-xs font-medium flex items-center justify-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
             <span id="btn-toggle-move-label">Mover no mapa</span>
+          </button>
+          <button id="btn-add-here" class="admin-only hidden w-full px-3 py-2 rounded-lg bg-emerald-700/30 hover:bg-emerald-700/50 border border-emerald-700 text-emerald-300 text-xs font-medium flex items-center justify-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Adicionar equipamento neste local
           </button>
           <div class="admin-only hidden grid grid-cols-2 gap-2 pt-1">
             <button id="btn-edit" class="px-3 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-medium">Editar</button>
