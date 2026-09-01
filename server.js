@@ -148,7 +148,7 @@ app.use('/api', (req, res, next) => {
   return requireAuth(req, res, next);
 });
 
-const EQUIPMENT_TYPES = ['ont', 'switch', 'access_point', 'roteador', 'outro'];
+const EQUIPMENT_TYPES = ['ont', 'switch', 'access_point', 'roteador', 'mikrotik', 'outro'];
 
 /* ------------------------------------------------------------------ *
  * Upload da planta baixa (imagem de fundo do mapa)

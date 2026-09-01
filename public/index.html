@@ -24,6 +24,7 @@
     font-family: ui-sans-serif, system-ui, sans-serif;
   }
   .ont-marker {
+    position: relative;
     display: flex; align-items: center; justify-content: center;
     width: 34px; height: 34px; border-radius: 9999px;
     border: 3px solid white; box-shadow: 0 2px 6px rgba(0,0,0,.4);
@@ -51,6 +52,16 @@
   .ont-status-dot.status-unknown { background-color: #6b7280; }
   .ont-marker.dragging,
   .ont-marker-photo-wrap.dragging .ont-marker-photo { outline: 2px dashed #fbbf24; outline-offset: 2px; }
+
+  /* Badge de contagem: aparece quando há mais de um equipamento no mesmo
+     ponto do mapa (ex.: vários equipamentos na mesma caixa/rack). */
+  .ont-marker-badge {
+    position: absolute; top: -5px; right: -5px;
+    min-width: 16px; height: 16px; padding: 0 3px; border-radius: 9999px;
+    background: #f59e0b; color: #1c1917; border: 2px solid #0f172a;
+    font-size: 9px; font-weight: 800; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
 
   /* Nome fantasia exibido abaixo do ícone do equipamento */
   .ont-marker-label {
@@ -190,6 +201,7 @@
               <option value="switch">🔀 Switch</option>
               <option value="access_point">📶 Access Point</option>
               <option value="roteador">🌐 Roteador</option>
+              <option value="mikrotik">📡 Mikrotik BR</option>
               <option value="outro">📦 Outro</option>
             </select>
           </div>
@@ -271,6 +283,22 @@
           <p class="text-[11px] text-slate-500 pb-1">Envie uma imagem (PNG, JPG, WEBP ou SVG, até 2MB) para cada tipo de equipamento. Ela substitui o ícone padrão em todos os marcadores desse tipo no mapa.</p>
           <div id="icons-list" class="space-y-2"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: SELECIONAR EQUIPAMENTO (quando há mais de um no mesmo local) -->
+  <!-- ============================================================= -->
+  <div id="picker-modal" class="fixed inset-0 z-[1075] hidden">
+    <div class="absolute inset-0 bg-black/50" data-close-picker></div>
+    <div class="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+      <div class="bg-slate-800 w-full sm:w-[380px] sm:rounded-2xl rounded-t-2xl max-h-[80vh] overflow-y-auto border border-slate-700 shadow-2xl">
+        <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+          <h2 class="font-semibold text-sm">Equipamentos neste local</h2>
+          <button data-close-picker class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <ul id="picker-items" class="p-4 space-y-2 text-sm"></ul>
       </div>
     </div>
   </div>

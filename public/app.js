@@ -67,6 +67,7 @@
     switch: '🔀',
     access_point: '📶',
     roteador: '🌐',
+    mikrotik: '📡',
     outro: '📦',
   };
   const EQUIPMENT_LABELS = {
@@ -74,6 +75,7 @@
     switch: 'Switch',
     access_point: 'Access Point',
     roteador: 'Roteador',
+    mikrotik: 'Mikrotik BR',
     outro: 'Outro',
   };
 
@@ -310,6 +312,21 @@
     openFormModal(null);
   }
 
+  // Tolerância (na unidade de coordenada de cada modo) para considerar dois
+  // equipamentos "no mesmo local" — ex.: vários equipamentos na mesma caixa/
+  // rack, cadastrados praticamente no mesmo ponto do mapa.
+  const CLUSTER_TOLERANCE = { floorplan: 15, osm: 0.00005 };
+
+  // Retorna todos os equipamentos (incluindo o próprio "ont") que estão a
+  // uma distância igual ou menor que a tolerância dele — ou seja, o "grupo"
+  // que compartilha aquele ponto do mapa.
+  function findNearbyOnts(ont) {
+    const tol = CLUSTER_TOLERANCE[state.mode] ?? CLUSTER_TOLERANCE.floorplan;
+    return state.onts.filter(
+      (o) => Math.abs(o.pos_x - ont.pos_x) <= tol && Math.abs(o.pos_y - ont.pos_y) <= tol
+    );
+  }
+
   /* ==================================================================== *
    * CARREGAMENTO E RENDERIZAÇÃO DOS EQUIPAMENTOS
    * ==================================================================== */
@@ -329,6 +346,8 @@
     const label = ont.nome_fantasia ? escapeHtml(ont.nome_fantasia) : '';
     const draggingClass = state.movingOntId === ont.id ? 'dragging' : '';
     const customUrl = state.customIcons[ont.equipment_type];
+    const groupSize = findNearbyOnts(ont).length;
+    const badge = groupSize > 1 ? `<span class="ont-marker-badge">${groupSize}</span>` : '';
 
     // Ícone customizado (foto enviada pelo admin): sem o anel/borda branca
     // padrão, só a imagem em boa proporção, com um badge de status no canto.
@@ -337,8 +356,9 @@
         <div class="ont-marker-photo-wrap ${draggingClass}">
           <div class="ont-marker-photo"><img src="${customUrl}" alt="" /></div>
           <span class="ont-status-dot ${statusClass}"></span>
+          ${badge}
         </div>`
-      : `<div class="ont-marker ${statusClass} ${draggingClass}">${equipmentIconHtml(ont.equipment_type, 18)}</div>`;
+      : `<div class="ont-marker ${statusClass} ${draggingClass}">${equipmentIconHtml(ont.equipment_type, 18)}${badge}</div>`;
 
     return L.divIcon({
       className: '',
@@ -372,7 +392,18 @@
         marker.setIcon(markerIcon(ont));
       } else {
         marker = L.marker(latlng, { icon: markerIcon(ont), draggable: false }).addTo(state.map);
-        marker.on('click', () => openDrawer(ont.id));
+        marker.on('click', () => {
+          // O clique atinge apenas o marcador do topo quando há vários no
+          // mesmo ponto — busca o grupo atual (não o closure antigo) pra
+          // sempre refletir o estado mais recente.
+          const current = state.onts.find((o) => o.id === ont.id) || ont;
+          const group = findNearbyOnts(current);
+          if (group.length > 1) {
+            openEquipmentPicker(group);
+          } else {
+            openDrawer(ont.id);
+          }
+        });
         state.markers.set(ont.id, marker);
       }
     });
@@ -464,6 +495,39 @@
     } catch (err) {
       showToast('Erro ao salvar: ' + err.message, true);
     }
+  }
+
+  /* ==================================================================== *
+   * SELETOR DE EQUIPAMENTOS (quando há mais de um no mesmo local)
+   * ==================================================================== */
+
+  function openEquipmentPicker(group) {
+    const dotClass = { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500' };
+    $('#picker-items').innerHTML = group
+      .map(
+        (o) => `
+      <li data-id="${o.id}" class="cursor-pointer bg-slate-900 hover:bg-slate-700/60 rounded-lg p-3 flex items-center gap-3">
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[o.status] || dotClass.unknown}"></span>
+        <div class="min-w-0 flex-1">
+          <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 16)} ${escapeHtml(o.tag_label)}</p>
+          <p class="text-[11px] text-slate-500 truncate">${escapeHtml(EQUIPMENT_LABELS[o.equipment_type] || '')}${o.nome_fantasia ? ' • ' + escapeHtml(o.nome_fantasia) : ''}</p>
+        </div>
+      </li>`
+      )
+      .join('');
+
+    $$('#picker-items li[data-id]').forEach((li) => {
+      li.addEventListener('click', () => {
+        closeEquipmentPicker();
+        openDrawer(Number(li.dataset.id));
+      });
+    });
+
+    $('#picker-modal').classList.remove('hidden');
+  }
+
+  function closeEquipmentPicker() {
+    $('#picker-modal').classList.add('hidden');
   }
 
   /* ==================================================================== *
@@ -849,6 +913,7 @@
     $$('[data-close-drawer]').forEach((el) => el.addEventListener('click', closeDrawer));
     $$('[data-close-list]').forEach((el) => el.addEventListener('click', closeListPanel));
     $$('[data-close-icons]').forEach((el) => el.addEventListener('click', closeIconsModal));
+    $$('[data-close-picker]').forEach((el) => el.addEventListener('click', closeEquipmentPicker));
     $('#btn-icons').addEventListener('click', openIconsModal);
 
     $('#ont-form').addEventListener('submit', handleFormSubmit);
