@@ -603,6 +603,7 @@
     const hasLogin = hasIxcLogin(ont);
     $('#d-status-actions').classList.toggle('hidden', !hasLogin);
     $('#btn-check-ixc').classList.toggle('hidden', !hasLogin);
+    $('#btn-access-device').classList.toggle('hidden', !hasLogin);
     $('#d-no-login-note').classList.toggle('hidden', hasLogin);
 
     const moving = state.movingOntId === ont.id;
@@ -671,6 +672,46 @@
       await loadOnts();
       openDrawer(state.activeOntId);
     } catch (err) {
+      showToast('Erro ao consultar IXC: ' + err.message, true);
+    }
+  }
+
+  // Consulta o IP atual do login no IXC (na hora, nunca um valor salvo —
+  // o IP muda a cada vez que o equipamento reinicia/reconecta) e abre a
+  // interface de administração dele em uma nova aba.
+  async function accessActiveDevice() {
+    if (!state.activeOntId) return;
+
+    // Abre a aba já de imediato, ainda dentro do clique do usuário — é o
+    // único jeito confiável de não cair no bloqueio de pop-up do navegador,
+    // já que a busca do IP é assíncrona. Preenche o endereço quando o IP
+    // chegar; se não conseguir, mostra um aviso na própria aba.
+    // (Sem "noopener" de propósito: por especificação, window.open() com
+    // noopener sempre devolve null — perderíamos a referência necessária
+    // para definir o endereço depois que o IP chegar.)
+    const newTab = window.open('about:blank', '_blank');
+
+    showToast('Consultando IP atual no IXC...');
+    try {
+      const result = await api(`/api/onts/${state.activeOntId}/check-status`, { method: 'POST' });
+      const ip = result.ixc.raw && result.ixc.raw.ip;
+      await loadOnts();
+      if (state.activeOntId) openDrawer(state.activeOntId);
+
+      if (!ip) {
+        showToast('IP indisponível — equipamento sem sessão ativa no IXC no momento.', true);
+        if (newTab) newTab.close();
+        return;
+      }
+      const url = `http://${ip}`;
+      if (newTab) {
+        newTab.location.href = url;
+        showToast(`Abrindo ${url}...`);
+      } else {
+        showToast(`IP: ${ip} — o navegador bloqueou a nova aba, copie o IP e acesse manualmente.`, true);
+      }
+    } catch (err) {
+      if (newTab) newTab.close();
       showToast('Erro ao consultar IXC: ' + err.message, true);
     }
   }
@@ -1076,6 +1117,7 @@
     $('#btn-mark-online').addEventListener('click', () => setActiveOntStatus('online'));
     $('#btn-mark-offline').addEventListener('click', () => setActiveOntStatus('offline'));
     $('#btn-check-ixc').addEventListener('click', checkActiveOntOnIxc);
+    $('#btn-access-device').addEventListener('click', accessActiveDevice);
     $('#btn-toggle-password').addEventListener('click', togglePasswordVisibility);
     $('#btn-toggle-move').addEventListener('click', toggleMoveActiveOnt);
     $('#btn-add-here').addEventListener('click', () => {
