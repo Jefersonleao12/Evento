@@ -52,6 +52,29 @@ function buildClient({ baseUrl, token } = {}) {
   });
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Algumas instalações têm uma proteção intermitente no proxy (fail2ban/WAF)
+// que bloqueia rajadas de requisições com "401 Authorization Required" —
+// um erro do Nginx, não da aplicação do IXC (que devolveria JSON, não
+// HTML). Esse bloqueio costuma ser passageiro, então tentamos de novo
+// algumas vezes com espaçamento antes de desistir, em vez de marcar a ONT
+// como "sem dados" já na primeira falha transitória.
+function isTransientProxyBlock(err) {
+  return err.response && err.response.status === 401 && typeof err.response.data === 'string';
+}
+
+async function postWithRetry(client, path, body, { retries = 2, delayMs = 1200 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await client.post(path, body);
+    } catch (err) {
+      if (attempt >= retries || !isTransientProxyBlock(err)) throw err;
+      await sleep(delayMs * (attempt + 1));
+    }
+  }
+}
+
 /**
  * Consulta o status de conexão (online/offline) de um login de radius/PPPoE
  * no IXC a partir do ID/Login cadastrado na ONT.
@@ -74,10 +97,7 @@ async function checkOntStatus(ixcLoginId, config = {}) {
   }
 
   try {
-    // Exemplo de consulta via endpoint de radusuarios online do IXC.
-    // Ajuste o "qtype"/"query" conforme o campo usado no seu IXC para
-    // identificar o login (login, id, ou id_grupo).
-    const response = await client.post('/webservice/v1/radusuarios', {
+    const response = await postWithRetry(client, '/webservice/v1/radusuarios', {
       qtype: 'radusuarios.login',
       query: ixcLoginId,
       oper: '=',
@@ -129,7 +149,7 @@ async function testConnection(config = {}) {
     return { ok: false, error: 'Configuração ausente (IXC_BASE_URL / IXC_TOKEN)' };
   }
   try {
-    await client.post('/webservice/v1/radusuarios', {
+    await postWithRetry(client, '/webservice/v1/radusuarios', {
       qtype: 'radusuarios.id',
       query: '1',
       oper: '>',
