@@ -348,7 +348,7 @@
   }
 
   function markerIcon(ont) {
-    const statusClass = `status-${effectiveStatus(ont)}`;
+    const statusClass = `status-${markerStatusKey(ont)}`;
     const label = ont.nome_fantasia ? escapeHtml(ont.nome_fantasia) : '';
     const draggingClass = state.movingOntId === ont.id ? 'dragging' : '';
     const customUrl = state.customIcons[ont.equipment_type];
@@ -526,12 +526,12 @@
 
   function openEquipmentPicker(group) {
     state.activePickerPos = { pos_x: group[0].pos_x, pos_y: group[0].pos_y };
-    const dotClass = { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500' };
+    const dotClass = { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500', retirado: 'bg-purple-500' };
     $('#picker-items').innerHTML = group
       .map(
         (o) => `
       <li data-id="${o.id}" class="cursor-pointer bg-slate-900 hover:bg-slate-700/60 rounded-lg p-3 flex items-center gap-3">
-        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[effectiveStatus(o)]}"></span>
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[markerStatusKey(o)]}"></span>
         <div class="min-w-0 flex-1">
           <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 16)} ${escapeHtml(o.tag_label)}</p>
           <p class="text-[11px] text-slate-500 truncate">${escapeHtml(EQUIPMENT_LABELS[o.equipment_type] || '')}${o.nome_fantasia ? ' • ' + escapeHtml(o.nome_fantasia) : ''}</p>
@@ -572,6 +572,13 @@
     return hasIxcLogin(ont) ? ont.status || 'unknown' : 'unknown';
   }
 
+  // Cor/estado exibido no marcador e nas listas: "retirado" (roxo) tem
+  // prioridade sobre o status de conexão real, pois sinaliza que o
+  // equipamento físico já não está mais neste local.
+  function markerStatusKey(ont) {
+    return ont.retirado ? 'retirado' : effectiveStatus(ont);
+  }
+
   function openDrawer(ontId) {
     const ont = state.onts.find((o) => o.id === ontId);
     if (!ont) return;
@@ -605,6 +612,14 @@
     $('#btn-check-ixc').classList.toggle('hidden', !hasLogin);
     $('#btn-access-device').classList.toggle('hidden', !hasLogin);
     $('#d-no-login-note').classList.toggle('hidden', hasLogin);
+
+    // Retirado para o almoxarifado: mostra quem retirou e quando, troca o
+    // botão "Retirar Equipamento" por "Devolver ao local".
+    $('#d-retirado-note').classList.toggle('hidden', !ont.retirado);
+    $('#d-retirado-por').textContent = ont.retirado_por_nome || '—';
+    $('#d-retirado-em').textContent = timeAgo(ont.retirado_em) || '';
+    $('#btn-retirar').classList.toggle('hidden', Boolean(ont.retirado));
+    $('#btn-devolver').classList.toggle('hidden', !ont.retirado);
 
     const moving = state.movingOntId === ont.id;
     $('#btn-toggle-move-label').textContent = moving ? 'Fixar posição' : 'Mover no mapa';
@@ -714,6 +729,83 @@
       if (newTab) newTab.close();
       showToast('Erro ao consultar IXC: ' + err.message, true);
     }
+  }
+
+  /* ==================================================================== *
+   * ALMOXARIFADO ("Retirar Equipamento" / "Devolver ao local")
+   * ==================================================================== */
+
+  async function retirarActiveOnt() {
+    if (!state.activeOntId) return;
+    if (!confirm('Retirar este equipamento para o seu almoxarifado? Ele continua sinalizado no mapa (em roxo) só como referência.')) return;
+    try {
+      await api(`/api/onts/${state.activeOntId}/retirar`, { method: 'PATCH' });
+      showToast('Equipamento retirado — agora está no seu almoxarifado.');
+      await loadOnts();
+      openDrawer(state.activeOntId);
+    } catch (err) {
+      showToast('Erro ao retirar equipamento: ' + err.message, true);
+    }
+  }
+
+  async function devolverActiveOnt() {
+    if (!state.activeOntId) return;
+    try {
+      await api(`/api/onts/${state.activeOntId}/devolver`, { method: 'PATCH' });
+      showToast('Equipamento devolvido ao local.');
+      await loadOnts();
+      openDrawer(state.activeOntId);
+    } catch (err) {
+      showToast('Erro ao devolver equipamento: ' + err.message, true);
+    }
+  }
+
+  let almoxarifadoItems = [];
+
+  async function openAlmoxarifado() {
+    $('#almoxarifado-modal').classList.remove('hidden');
+    $('#almoxarifado-items').innerHTML = `<li class="text-slate-500 text-center py-6 text-xs">Carregando...</li>`;
+    try {
+      almoxarifadoItems = await api('/api/almoxarifado');
+      renderAlmoxarifado();
+    } catch (err) {
+      $('#almoxarifado-items').innerHTML = '';
+      showToast('Erro ao carregar almoxarifado: ' + err.message, true);
+    }
+  }
+
+  function closeAlmoxarifado() {
+    $('#almoxarifado-modal').classList.add('hidden');
+  }
+
+  function renderAlmoxarifado() {
+    const empty = almoxarifadoItems.length === 0;
+    $('#almoxarifado-empty').classList.toggle('hidden', !empty);
+    $('#almoxarifado-items').innerHTML = almoxarifadoItems
+      .map(
+        (o) => `
+      <li data-id="${o.id}" class="cursor-pointer bg-slate-900 hover:bg-slate-700/60 rounded-lg p-3 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 14)} ${escapeHtml(o.tag_label)}${o.nome_fantasia ? ' — ' + escapeHtml(o.nome_fantasia) : ''}</p>
+          <p class="text-[11px] text-slate-500 truncate">${escapeHtml(EQUIPMENT_LABELS[o.equipment_type] || '')} • retirado ${escapeHtml(timeAgo(o.retirado_em) || '')}</p>
+        </div>
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 bg-purple-500"></span>
+      </li>`
+      )
+      .join('');
+
+    $$('#almoxarifado-items li[data-id]').forEach((li) => {
+      li.addEventListener('click', () => {
+        const id = Number(li.dataset.id);
+        closeAlmoxarifado();
+        const ont = state.onts.find((o) => o.id === id);
+        if (ont) {
+          const closeZoom = CLOSE_ZOOM[state.mode] ?? CLOSE_ZOOM.osm;
+          state.map.setView(posToLatLng(ont), Math.max(state.map.getZoom(), closeZoom));
+        }
+        openDrawer(id);
+      });
+    });
   }
 
   async function deleteActiveOnt() {
@@ -1057,17 +1149,17 @@
         .some((v) => v.toLowerCase().includes(term));
     });
 
-    const dotClass = { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500' };
+    const dotClass = { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500', retirado: 'bg-purple-500' };
 
     $('#list-items').innerHTML = filtered
       .map(
         (o) => `
       <li data-id="${o.id}" class="cursor-pointer bg-slate-900 hover:bg-slate-700/60 rounded-lg p-3 flex items-center justify-between gap-2">
         <div class="min-w-0">
-          <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 14)} ${escapeHtml(o.tag_label)}${o.nome_fantasia ? ' — ' + escapeHtml(o.nome_fantasia) : ''}</p>
+          <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 14)} ${escapeHtml(o.tag_label)}${o.nome_fantasia ? ' — ' + escapeHtml(o.nome_fantasia) : ''}${o.retirado ? ' <span class="text-purple-400">(retirado)</span>' : ''}</p>
           <p class="text-[11px] text-slate-500 truncate">${escapeHtml(o.asset_number || 'sem patrimônio')} • ${escapeHtml(o.mac_address || 'sem MAC')} • ${escapeHtml(timeAgo(o.last_checked_at) || 'nunca verificado')}</p>
         </div>
-        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[effectiveStatus(o)]}"></span>
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[markerStatusKey(o)]}"></span>
       </li>`
       )
       .join('') || `<li class="text-slate-500 text-center py-6 text-xs">Nenhum equipamento encontrado.</li>`;
@@ -1106,8 +1198,10 @@
     $$('[data-close-icons]').forEach((el) => el.addEventListener('click', closeIconsModal));
     $$('[data-close-picker]').forEach((el) => el.addEventListener('click', closeEquipmentPicker));
     $$('[data-close-wifi-report]').forEach((el) => el.addEventListener('click', closeWifiReport));
+    $$('[data-close-almoxarifado]').forEach((el) => el.addEventListener('click', closeAlmoxarifado));
     $('#btn-icons').addEventListener('click', openIconsModal);
     $('#btn-wifi-report').addEventListener('click', openWifiReport);
+    $('#btn-almoxarifado').addEventListener('click', openAlmoxarifado);
     $('#btn-wifi-report-csv').addEventListener('click', downloadWifiReportCsv);
     $('#btn-wifi-report-print').addEventListener('click', () => window.print());
 
@@ -1123,6 +1217,8 @@
     $('#btn-mark-offline').addEventListener('click', () => setActiveOntStatus('offline'));
     $('#btn-check-ixc').addEventListener('click', checkActiveOntOnIxc);
     $('#btn-access-device').addEventListener('click', accessActiveDevice);
+    $('#btn-retirar').addEventListener('click', retirarActiveOnt);
+    $('#btn-devolver').addEventListener('click', devolverActiveOnt);
     $('#btn-toggle-password').addEventListener('click', togglePasswordVisibility);
     $('#btn-toggle-move').addEventListener('click', toggleMoveActiveOnt);
     $('#btn-add-here').addEventListener('click', () => {

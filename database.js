@@ -99,6 +99,14 @@ function initDatabase() {
   addColumnIfMissing('onts', 'equipment_type', `TEXT NOT NULL DEFAULT 'ont'`);
   addColumnIfMissing('onts', 'nome_fantasia', `TEXT`);
 
+  // Migração: "Retirar Equipamento" para o almoxarifado de um usuário. O
+  // equipamento permanece no mapa (sinalizado em roxo) com todas as
+  // informações originais — só passa a constar como retirado por alguém.
+  addColumnIfMissing('onts', 'retirado', `INTEGER NOT NULL DEFAULT 0`);
+  addColumnIfMissing('onts', 'retirado_por', `INTEGER`); // users.id de quem retirou
+  addColumnIfMissing('onts', 'retirado_por_nome', `TEXT`); // nome copiado (sobrevive se o usuário for removido)
+  addColumnIfMissing('onts', 'retirado_em', `TEXT`);
+
   // Índice para buscas rápidas por etiqueta ou login IXC.
   db.exec(`CREATE INDEX IF NOT EXISTS idx_onts_tag ON onts (tag_label);`);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_onts_ixc_login ON onts (ixc_login_id);`);

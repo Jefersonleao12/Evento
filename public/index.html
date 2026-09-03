@@ -33,6 +33,9 @@
   .ont-marker.status-online  { background-color: #16a34a; }
   .ont-marker.status-offline { background-color: #dc2626; }
   .ont-marker.status-unknown { background-color: #6b7280; }
+  /* Retirado para o almoxarifado: sempre roxo, independente do status de conexão —
+     sinaliza no mapa que já não há mais o equipamento físico neste local. */
+  .ont-marker.status-retirado { background-color: #9333ea; }
 
   /* Ícone customizado (foto enviada pelo admin): sem anel/borda branca,
      só a imagem em boa proporção, com um "badge" de status no canto. */
@@ -50,6 +53,7 @@
   .ont-status-dot.status-online  { background-color: #16a34a; }
   .ont-status-dot.status-offline { background-color: #dc2626; }
   .ont-status-dot.status-unknown { background-color: #6b7280; }
+  .ont-status-dot.status-retirado { background-color: #9333ea; }
   .ont-marker.dragging,
   .ont-marker-photo-wrap.dragging .ont-marker-photo { outline: 2px dashed #fbbf24; outline-offset: 2px; }
 
@@ -150,6 +154,11 @@
         class="admin-only px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1 hidden">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-8 0h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
         <span class="hidden sm:inline">Wi-Fi</span>
+      </button>
+      <button id="btn-almoxarifado" title="Meu almoxarifado"
+        class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+        <span class="hidden sm:inline">Almoxarifado</span>
       </button>
       <button id="btn-list" title="Listar ONTs"
         class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
@@ -339,6 +348,25 @@
   </div>
 
   <!-- ============================================================= -->
+  <!-- MODAL: MEU ALMOXARIFADO (equipamentos retirados por mim) -->
+  <!-- ============================================================= -->
+  <div id="almoxarifado-modal" class="fixed inset-0 z-[1100] hidden">
+    <div class="absolute inset-0 bg-black/60" data-close-almoxarifado></div>
+    <div class="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+      <div class="bg-slate-800 w-full sm:w-[420px] sm:rounded-2xl rounded-t-2xl max-h-[85vh] overflow-y-auto border border-slate-700 shadow-2xl">
+        <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between">
+          <h2 class="font-semibold text-sm">Meu Almoxarifado</h2>
+          <button data-close-almoxarifado class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+        </div>
+        <div class="p-4">
+          <p id="almoxarifado-empty" class="hidden text-[11px] text-slate-500 text-center py-6">Você ainda não retirou nenhum equipamento.</p>
+          <ul id="almoxarifado-items" class="space-y-2 text-sm"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
   <!-- MODAL: SELECIONAR EQUIPAMENTO (quando há mais de um no mesmo local) -->
   <!-- ============================================================= -->
   <div id="picker-modal" class="fixed inset-0 z-[1075] hidden">
@@ -426,6 +454,10 @@
 
         <p id="d-last-check" class="text-[11px] text-slate-500">-</p>
 
+        <p id="d-retirado-note" class="hidden text-[11px] text-purple-300 bg-purple-950/40 border border-purple-800 rounded-lg p-2.5">
+          Retirado do local por <span id="d-retirado-por" class="font-semibold"></span> — <span id="d-retirado-em"></span>. O equipamento continua sinalizado aqui só para referência.
+        </p>
+
         <!-- Ações rápidas -->
         <div class="pt-2 space-y-2">
           <p id="d-no-login-note" class="hidden text-[11px] text-slate-500 bg-slate-900 rounded-lg p-2.5">
@@ -442,6 +474,14 @@
           <button id="btn-access-device" class="w-full px-3 py-2 rounded-lg bg-sky-700/40 hover:bg-sky-700/60 border border-sky-700 text-sky-300 text-xs font-medium flex items-center justify-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
             Acessar equipamento
+          </button>
+          <button id="btn-retirar" class="w-full px-3 py-2 rounded-lg bg-purple-700/30 hover:bg-purple-700/50 border border-purple-700 text-purple-300 text-xs font-medium flex items-center justify-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/></svg>
+            Retirar Equipamento
+          </button>
+          <button id="btn-devolver" class="w-full px-3 py-2 rounded-lg bg-purple-700/30 hover:bg-purple-700/50 border border-purple-700 text-purple-300 text-xs font-medium flex items-center justify-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m0 0l-4-4m4 4l4-4"/></svg>
+            Devolver ao local
           </button>
           <button id="btn-toggle-move" class="admin-only hidden w-full px-3 py-2 rounded-lg bg-amber-700/30 hover:bg-amber-700/50 border border-amber-700 text-amber-300 text-xs font-medium flex items-center justify-center gap-1.5">
             <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5v4m0-4h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>

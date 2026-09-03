@@ -277,7 +277,8 @@ app.post('/api/floorplan', requireAdmin, upload.single('floorplan'), async (req,
 const LIST_COLUMNS = `
   id, tag_label, asset_number, mac_address, wifi_ssid, ixc_login_id,
   equipment_type, nome_fantasia, pos_x, pos_y, status, last_checked_at,
-  notes, created_at, updated_at
+  notes, created_at, updated_at,
+  retirado, retirado_por, retirado_por_nome, retirado_em
 `;
 
 // Lista todos os equipamentos cadastrados (sem a senha do Wi-Fi — ver
@@ -486,6 +487,72 @@ app.delete('/api/onts/:id', requireAdmin, (req, res) => {
 });
 
 /* ==================================================================== *
+ * ROTAS - ALMOXARIFADO ("Retirar Equipamento")
+ * ------------------------------------------------------------------
+ * O equipamento retirado permanece no mapa, no mesmo local, sinalizado
+ * como "retirado" (o frontend mostra em roxo) — continua com todas as
+ * informações originais (cliente, Wi-Fi, etc.) para não perder o
+ * histórico de que havia um equipamento ali. Quem retirou passa a ver
+ * esse equipamento no próprio almoxarifado (GET /api/almoxarifado).
+ * ==================================================================== */
+
+// Marca o equipamento como retirado pelo usuário logado.
+app.patch('/api/onts/:id/retirar', (req, res) => {
+  const existing = db.prepare('SELECT id, retirado FROM onts WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Equipamento não encontrado.' });
+  if (existing.retirado) {
+    return res.status(400).json({ error: 'Este equipamento já foi retirado por alguém.' });
+  }
+
+  db.prepare(
+    `UPDATE onts SET
+       retirado = 1,
+       retirado_por = ?,
+       retirado_por_nome = ?,
+       retirado_em = datetime('now'),
+       updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(req.session.user.id, req.session.user.username, req.params.id);
+
+  res.json(db.prepare(`SELECT ${LIST_COLUMNS} FROM onts WHERE id = ?`).get(req.params.id));
+});
+
+// Devolve o equipamento (cancela a retirada) — o próprio usuário que
+// retirou, ou um admin, podem devolver.
+app.patch('/api/onts/:id/devolver', (req, res) => {
+  const existing = db.prepare('SELECT id, retirado, retirado_por FROM onts WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Equipamento não encontrado.' });
+  if (!existing.retirado) {
+    return res.status(400).json({ error: 'Este equipamento não está retirado.' });
+  }
+
+  const isOwner = existing.retirado_por === req.session.user.id;
+  if (!isOwner && req.session.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Só quem retirou (ou um admin) pode devolver este equipamento.' });
+  }
+
+  db.prepare(
+    `UPDATE onts SET
+       retirado = 0,
+       retirado_por = NULL,
+       retirado_por_nome = NULL,
+       retirado_em = NULL,
+       updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(req.params.id);
+
+  res.json(db.prepare(`SELECT ${LIST_COLUMNS} FROM onts WHERE id = ?`).get(req.params.id));
+});
+
+// Almoxarifado do usuário logado: equipamentos que ele mesmo retirou.
+app.get('/api/almoxarifado', (req, res) => {
+  const rows = db
+    .prepare(`SELECT ${LIST_COLUMNS} FROM onts WHERE retirado = 1 AND retirado_por = ? ORDER BY retirado_em DESC`)
+    .all(req.session.user.id);
+  res.json(rows);
+});
+
+/* ==================================================================== *
  * ROTAS - INTEGRAÇÃO IXC PROVEDOR
  * ==================================================================== */
 
@@ -550,7 +617,10 @@ app.post('/api/onts/check-status', ixcCheckLimiter, async (req, res) => {
 // estar com o painel aberto no navegador (diferente do auto-refresh do
 // frontend, que só funciona enquanto uma aba está aberta). Assim o status
 // se mantém atualizado mesmo sem ninguém olhando.
-const IXC_AUTO_CHECK_INTERVAL_MS = Number(process.env.IXC_AUTO_CHECK_INTERVAL_MS) || 60 * 1000;
+const IXC_AUTO_CHECK_INTERVAL_MS =
+  process.env.IXC_AUTO_CHECK_INTERVAL_MS !== undefined
+    ? Number(process.env.IXC_AUTO_CHECK_INTERVAL_MS)
+    : 60 * 1000;
 let scheduledCheckRunning = false;
 
 function startScheduledIxcChecks() {
