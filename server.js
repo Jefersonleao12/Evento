@@ -505,7 +505,7 @@ const IXC_BATCH_DELAY_MS = Number(process.env.IXC_BATCH_DELAY_MS) || 200;
 // sobrecarregar a API do IXC durante o evento, e é limitada por rate limit
 // (ver ixcCheckLimiter) para não ser disparada em excesso.
 app.post('/api/onts/check-status', ixcCheckLimiter, async (req, res) => {
-  const onts = db.prepare('SELECT * FROM onts WHERE ixc_login_id IS NOT NULL AND ixc_login_id != ""').all();
+  const onts = db.prepare("SELECT * FROM onts WHERE ixc_login_id IS NOT NULL AND ixc_login_id != ''").all();
   const ixcConfig = {
     baseUrl: getSetting('ixc_base_url'),
     token: getSetting('ixc_token'),
