@@ -790,9 +790,14 @@
 
   function startAutoRefresh() {
     stopAutoRefresh();
+    // O servidor já consulta o IXC periodicamente sozinho (independente de
+    // haver alguém com o painel aberto). Aqui só relemos os dados já
+    // atualizados no banco, em vez de cada aba aberta bater na API do IXC
+    // por conta própria — evita sobrecarregar o IXC com consultas repetidas.
     state.autoRefreshTimer = setInterval(() => {
       if (document.hidden) return; // evita gastar chamadas com a aba em segundo plano
-      checkAllOnIxc(true);
+      loadOnts();
+      if (state.activeOntId) updateLastCheckText();
     }, AUTO_REFRESH_MS);
   }
 

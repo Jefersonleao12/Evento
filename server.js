@@ -518,7 +518,10 @@ const IXC_BATCH_DELAY_MS = Number(process.env.IXC_BATCH_DELAY_MS) || 200;
 // Executa as chamadas em série com espaçamento (IXC_BATCH_DELAY_MS) para não
 // sobrecarregar a API do IXC durante o evento, e é limitada por rate limit
 // (ver ixcCheckLimiter) para não ser disparada em excesso.
-app.post('/api/onts/check-status', ixcCheckLimiter, async (req, res) => {
+// Consulta o status de todos os equipamentos com login IXC cadastrado,
+// atualizando o banco. Usada tanto pela rota manual (botão "IXC") quanto
+// pelo agendamento automático no servidor (ver startScheduledIxcChecks).
+async function checkAllEquipmentStatus() {
   const onts = db.prepare("SELECT * FROM onts WHERE ixc_login_id IS NOT NULL AND ixc_login_id != ''").all();
   const ixcConfig = {
     baseUrl: getSetting('ixc_base_url'),
@@ -535,8 +538,51 @@ app.post('/api/onts/check-status', ixcCheckLimiter, async (req, res) => {
     if (IXC_BATCH_DELAY_MS > 0) await sleep(IXC_BATCH_DELAY_MS);
   }
 
+  return results;
+}
+
+app.post('/api/onts/check-status', ixcCheckLimiter, async (req, res) => {
+  const results = await checkAllEquipmentStatus();
   res.json({ checked: results.length, results });
 });
+
+// Consulta automática no servidor — roda sozinha, independente de alguém
+// estar com o painel aberto no navegador (diferente do auto-refresh do
+// frontend, que só funciona enquanto uma aba está aberta). Assim o status
+// se mantém atualizado mesmo sem ninguém olhando.
+const IXC_AUTO_CHECK_INTERVAL_MS = Number(process.env.IXC_AUTO_CHECK_INTERVAL_MS) || 60 * 1000;
+let scheduledCheckRunning = false;
+
+function startScheduledIxcChecks() {
+  if (IXC_AUTO_CHECK_INTERVAL_MS <= 0) {
+    console.log('[ixc-scheduler] Desativado (IXC_AUTO_CHECK_INTERVAL_MS <= 0).');
+    return;
+  }
+
+  setInterval(async () => {
+    if (scheduledCheckRunning) {
+      console.warn('[ixc-scheduler] Ciclo anterior ainda em andamento — pulando esta rodada.');
+      return;
+    }
+    const baseUrl = getSetting('ixc_base_url');
+    const token = getSetting('ixc_token');
+    if (!baseUrl || !token) return; // IXC ainda não configurado — nada a fazer
+
+    scheduledCheckRunning = true;
+    try {
+      const results = await checkAllEquipmentStatus();
+      if (results.length > 0) {
+        console.log(`[ixc-scheduler] ${results.length} equipamento(s) verificado(s) automaticamente.`);
+      }
+    } catch (err) {
+      console.error('[ixc-scheduler] Erro na consulta automática:', err.message);
+    } finally {
+      scheduledCheckRunning = false;
+    }
+  }, IXC_AUTO_CHECK_INTERVAL_MS);
+
+  console.log(`[ixc-scheduler] Consulta automática ao IXC a cada ${IXC_AUTO_CHECK_INTERVAL_MS / 1000}s.`);
+}
 
 /* ==================================================================== *
  * ROTAS - CONFIGURAÇÕES (credenciais IXC via interface, opcional). Admin apenas.
@@ -618,4 +664,5 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Painel de Gestão de ONTs rodando em http://localhost:${PORT}\n`);
+  startScheduledIxcChecks();
 });
