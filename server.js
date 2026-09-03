@@ -565,6 +565,11 @@ app.post('/api/settings/ixc/test', requireAdmin, async (req, res) => {
   res.json(result);
 });
 
+// Equipamentos sem login IXC nunca contam como online/offline — não há
+// como confirmar status real deles, então sempre entram em "sem status"
+// (mesmo critério usado no PATCH /status e no frontend).
+const HAS_LOGIN_SQL = `(ixc_login_id IS NOT NULL AND TRIM(ixc_login_id) != '')`;
+
 /* ==================================================================== *
  * ROTA - RELATÓRIO DE WI-FI (nome fantasia, SSID e senha). Admin apenas,
  * já que expõe senhas de Wi-Fi em lote.
@@ -573,9 +578,12 @@ app.get('/api/reports/wifi', requireAdmin, (req, res) => {
   const rows = db.prepare(`
     SELECT id, tag_label, equipment_type, nome_fantasia, wifi_ssid, wifi_password
     FROM onts
-    WHERE (nome_fantasia IS NOT NULL AND nome_fantasia != '')
-       OR (wifi_ssid IS NOT NULL AND wifi_ssid != '')
-       OR (wifi_password IS NOT NULL AND wifi_password != '')
+    WHERE ${HAS_LOGIN_SQL}
+      AND (
+        (nome_fantasia IS NOT NULL AND nome_fantasia != '')
+        OR (wifi_ssid IS NOT NULL AND wifi_ssid != '')
+        OR (wifi_password IS NOT NULL AND wifi_password != '')
+      )
     ORDER BY tag_label ASC
   `).all();
   res.json(rows);
@@ -584,11 +592,6 @@ app.get('/api/reports/wifi', requireAdmin, (req, res) => {
 /* ==================================================================== *
  * ROTA - ESTATÍSTICAS (resumo para dashboard/header)
  * ==================================================================== */
-// Equipamentos sem login IXC nunca contam como online/offline — não há
-// como confirmar status real deles, então sempre entram em "sem status"
-// (mesmo critério usado no PATCH /status e no frontend).
-const HAS_LOGIN_SQL = `(ixc_login_id IS NOT NULL AND TRIM(ixc_login_id) != '')`;
-
 app.get('/api/stats', (req, res) => {
   const total = db.prepare('SELECT COUNT(*) AS c FROM onts').get().c;
   const online = db.prepare(`SELECT COUNT(*) AS c FROM onts WHERE status = 'online' AND ${HAS_LOGIN_SQL}`).get().c;
