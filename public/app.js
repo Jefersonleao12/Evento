@@ -180,7 +180,8 @@
     $('#login-screen').classList.add('hidden');
     $('#app-header').classList.remove('hidden');
     $('#app-shell').classList.remove('hidden');
-    $('#current-username').textContent = state.currentUser.username;
+    $('#menu-username').textContent =
+      `${state.currentUser.username} (${state.currentUser.role === 'admin' ? 'admin' : 'viewer'})`;
     applyRoleVisibility();
     await loadEquipmentIcons();
 
@@ -238,6 +239,7 @@
     state.onts = [];
     for (const marker of state.markers.values()) state.map && state.map.removeLayer(marker);
     state.markers.clear();
+    closeMenuPanel();
     showLoginScreen();
   }
 
@@ -420,6 +422,10 @@
       const stats = await api('/api/stats');
       $('#stats-line').textContent =
         `${stats.total} equipamentos • ${stats.online} online • ${stats.offline} offline • ${stats.unknown} sem dados`;
+      $('#legend-online-count').textContent = stats.online;
+      $('#legend-offline-count').textContent = stats.offline;
+      $('#legend-unknown-count').textContent = stats.unknown;
+      $('#legend-total-count').textContent = stats.total;
     } catch (_) {
       $('#stats-line').textContent = `${state.onts.length} equipamentos cadastrados`;
     }
@@ -729,6 +735,19 @@
       if (newTab) newTab.close();
       showToast('Erro ao consultar IXC: ' + err.message, true);
     }
+  }
+
+  /* ==================================================================== *
+   * MENU DE AÇÕES (cabeçalho enxuto no celular — ações secundárias
+   * ficam aqui em vez de lotar a barra de ícones)
+   * ==================================================================== */
+
+  function openMenuPanel() {
+    $('#menu-panel').classList.remove('hidden');
+  }
+
+  function closeMenuPanel() {
+    $('#menu-panel').classList.add('hidden');
   }
 
   /* ==================================================================== *
@@ -1199,9 +1218,11 @@
     $$('[data-close-picker]').forEach((el) => el.addEventListener('click', closeEquipmentPicker));
     $$('[data-close-wifi-report]').forEach((el) => el.addEventListener('click', closeWifiReport));
     $$('[data-close-almoxarifado]').forEach((el) => el.addEventListener('click', closeAlmoxarifado));
-    $('#btn-icons').addEventListener('click', openIconsModal);
-    $('#btn-wifi-report').addEventListener('click', openWifiReport);
-    $('#btn-almoxarifado').addEventListener('click', openAlmoxarifado);
+    $$('[data-close-menu]').forEach((el) => el.addEventListener('click', closeMenuPanel));
+    $('#btn-menu').addEventListener('click', openMenuPanel);
+    $('#btn-icons').addEventListener('click', () => { closeMenuPanel(); openIconsModal(); });
+    $('#btn-wifi-report').addEventListener('click', () => { closeMenuPanel(); openWifiReport(); });
+    $('#btn-almoxarifado').addEventListener('click', () => { closeMenuPanel(); openAlmoxarifado(); });
     $('#btn-wifi-report-csv').addEventListener('click', downloadWifiReportCsv);
     $('#btn-wifi-report-print').addEventListener('click', () => window.print());
 
@@ -1229,8 +1250,8 @@
       if (state.activePickerPos) openFormModalAtPosition(state.activePickerPos);
     });
 
-    $('#btn-refresh-status').addEventListener('click', () => checkAllOnIxc(false));
-    $('#btn-upload-plant').addEventListener('click', () => $('#plant-file-input').click());
+    $('#btn-refresh-status').addEventListener('click', () => { closeMenuPanel(); checkAllOnIxc(false); });
+    $('#btn-upload-plant').addEventListener('click', () => { closeMenuPanel(); $('#plant-file-input').click(); });
     $('#plant-file-input').addEventListener('change', handlePlantFileSelected);
 
     $('#btn-list').addEventListener('click', openListPanel);
