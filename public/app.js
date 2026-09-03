@@ -864,6 +864,78 @@
   }
 
   /* ==================================================================== *
+   * RELATÓRIO DE WI-FI (nome fantasia, SSID, senha) — somente admin
+   * ==================================================================== */
+
+  let wifiReportRows = [];
+
+  async function openWifiReport() {
+    if (!isAdmin()) return;
+    $('#wifi-report-modal').classList.remove('hidden');
+    $('#wifi-report-rows').innerHTML = `<tr><td colspan="5" class="py-3 text-slate-500">Carregando...</td></tr>`;
+    try {
+      wifiReportRows = await api('/api/reports/wifi');
+      renderWifiReport();
+    } catch (err) {
+      $('#wifi-report-rows').innerHTML = '';
+      showToast('Erro ao carregar relatório: ' + err.message, true);
+    }
+  }
+
+  function closeWifiReport() {
+    $('#wifi-report-modal').classList.add('hidden');
+  }
+
+  function renderWifiReport() {
+    const empty = wifiReportRows.length === 0;
+    $('#wifi-report-empty').classList.toggle('hidden', !empty);
+    $('#wifi-report-table').classList.toggle('hidden', empty);
+    $('#wifi-report-rows').innerHTML = wifiReportRows
+      .map(
+        (o) => `
+      <tr class="border-b border-slate-700/60">
+        <td class="py-1.5 pr-3">${escapeHtml(o.nome_fantasia || '—')}</td>
+        <td class="py-1.5 pr-3">${escapeHtml(o.tag_label || '—')}</td>
+        <td class="py-1.5 pr-3">${escapeHtml(EQUIPMENT_LABELS[o.equipment_type] || '')}</td>
+        <td class="py-1.5 pr-3 font-mono">${escapeHtml(o.wifi_ssid || '—')}</td>
+        <td class="py-1.5 pr-3 font-mono">${escapeHtml(o.wifi_password || '—')}</td>
+      </tr>`
+      )
+      .join('');
+  }
+
+  function csvField(value) {
+    const str = String(value ?? '');
+    return /[;"\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  }
+
+  function downloadWifiReportCsv() {
+    if (wifiReportRows.length === 0) return;
+    const header = ['Nome Fantasia', 'Etiqueta', 'Tipo', 'Wi-Fi (SSID)', 'Senha'];
+    const lines = [header.join(';')].concat(
+      wifiReportRows.map((o) =>
+        [
+          csvField(o.nome_fantasia),
+          csvField(o.tag_label),
+          csvField(EQUIPMENT_LABELS[o.equipment_type] || ''),
+          csvField(o.wifi_ssid),
+          csvField(o.wifi_password),
+        ].join(';')
+      )
+    );
+    // BOM no início garante que o Excel abra os acentos corretamente (UTF-8).
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-wifi-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  /* ==================================================================== *
    * PAINEL DE LISTAGEM
    * ==================================================================== */
 
@@ -934,7 +1006,11 @@
     $$('[data-close-list]').forEach((el) => el.addEventListener('click', closeListPanel));
     $$('[data-close-icons]').forEach((el) => el.addEventListener('click', closeIconsModal));
     $$('[data-close-picker]').forEach((el) => el.addEventListener('click', closeEquipmentPicker));
+    $$('[data-close-wifi-report]').forEach((el) => el.addEventListener('click', closeWifiReport));
     $('#btn-icons').addEventListener('click', openIconsModal);
+    $('#btn-wifi-report').addEventListener('click', openWifiReport);
+    $('#btn-wifi-report-csv').addEventListener('click', downloadWifiReportCsv);
+    $('#btn-wifi-report-print').addEventListener('click', () => window.print());
 
     $('#ont-form').addEventListener('submit', handleFormSubmit);
 

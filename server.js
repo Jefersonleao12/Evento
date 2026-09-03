@@ -552,6 +552,22 @@ app.post('/api/settings/ixc/test', requireAdmin, async (req, res) => {
 });
 
 /* ==================================================================== *
+ * ROTA - RELATÓRIO DE WI-FI (nome fantasia, SSID e senha). Admin apenas,
+ * já que expõe senhas de Wi-Fi em lote.
+ * ==================================================================== */
+app.get('/api/reports/wifi', requireAdmin, (req, res) => {
+  const rows = db.prepare(`
+    SELECT id, tag_label, equipment_type, nome_fantasia, wifi_ssid, wifi_password
+    FROM onts
+    WHERE (nome_fantasia IS NOT NULL AND nome_fantasia != '')
+       OR (wifi_ssid IS NOT NULL AND wifi_ssid != '')
+       OR (wifi_password IS NOT NULL AND wifi_password != '')
+    ORDER BY tag_label ASC
+  `).all();
+  res.json(rows);
+});
+
+/* ==================================================================== *
  * ROTA - ESTATÍSTICAS (resumo para dashboard/header)
  * ==================================================================== */
 app.get('/api/stats', (req, res) => {

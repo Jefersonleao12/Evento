@@ -80,6 +80,16 @@
 
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+  /* Impressão do relatório de Wi-Fi: mostra só a tabela, fundo branco */
+  @media print {
+    body * { visibility: hidden; }
+    #wifi-report-modal, #wifi-report-modal * { visibility: visible; }
+    #wifi-report-modal { position: absolute; inset: 0; background: white; }
+    #wifi-report-modal .no-print { display: none !important; }
+    #wifi-report-table { color: black; }
+    #wifi-report-table th, #wifi-report-table td { color: black; border-color: #ccc; }
+  }
 </style>
 </head>
 
@@ -135,6 +145,11 @@
         class="admin-only px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1 hidden">
         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M14 8h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         <span class="hidden sm:inline">Ícones</span>
+      </button>
+      <button id="btn-wifi-report" title="Relatório de Wi-Fi"
+        class="admin-only px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1 hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-8 0h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        <span class="hidden sm:inline">Wi-Fi</span>
       </button>
       <button id="btn-list" title="Listar ONTs"
         class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium border border-slate-700 flex items-center gap-1">
@@ -282,6 +297,42 @@
         <div class="p-4 space-y-2">
           <p class="text-[11px] text-slate-500 pb-1">Envie uma imagem (PNG, JPG, WEBP ou SVG, até 2MB) para cada tipo de equipamento. Ela substitui o ícone padrão em todos os marcadores desse tipo no mapa.</p>
           <div id="icons-list" class="space-y-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: RELATÓRIO DE WI-FI (admin) -->
+  <!-- ============================================================= -->
+  <div id="wifi-report-modal" class="fixed inset-0 z-[1100] hidden">
+    <div class="absolute inset-0 bg-black/60" data-close-wifi-report></div>
+    <div class="absolute inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+      <div class="bg-slate-800 w-full sm:w-[640px] sm:rounded-2xl rounded-t-2xl max-h-[92vh] overflow-y-auto border border-slate-700 shadow-2xl">
+        <div class="sticky top-0 bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between no-print">
+          <h2 class="font-semibold text-sm">Relatório de Wi-Fi</h2>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-wifi-report-csv" title="Baixar CSV" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-[11px] font-medium">CSV</button>
+            <button id="btn-wifi-report-print" title="Imprimir" class="px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-[11px] font-medium">Imprimir</button>
+            <button data-close-wifi-report class="text-slate-400 hover:text-white text-xl leading-none px-1">&times;</button>
+          </div>
+        </div>
+        <div class="p-4">
+          <p id="wifi-report-empty" class="text-[11px] text-slate-500 hidden">Nenhum equipamento com nome fantasia, SSID ou senha de Wi-Fi cadastrado.</p>
+          <div class="overflow-x-auto">
+            <table id="wifi-report-table" class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="text-left text-slate-400 border-b border-slate-700">
+                  <th class="py-1.5 pr-3">Nome Fantasia</th>
+                  <th class="py-1.5 pr-3">Etiqueta</th>
+                  <th class="py-1.5 pr-3">Tipo</th>
+                  <th class="py-1.5 pr-3">Wi-Fi (SSID)</th>
+                  <th class="py-1.5 pr-3">Senha</th>
+                </tr>
+              </thead>
+              <tbody id="wifi-report-rows"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
