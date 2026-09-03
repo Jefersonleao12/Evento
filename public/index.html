@@ -171,7 +171,7 @@
     <div class="fixed z-[999] top-[52px] left-2 bg-slate-900/90 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] flex items-center gap-3">
       <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block"></span>Online</span>
       <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span>Offline</span>
-      <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-gray-500 inline-block"></span>Sem dados</span>
+      <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-gray-500 inline-block"></span>Sem Status</span>
     </div>
 
     <!-- ============================================================= -->
@@ -428,7 +428,10 @@
 
         <!-- Ações rápidas -->
         <div class="pt-2 space-y-2">
-          <div class="grid grid-cols-2 gap-2">
+          <p id="d-no-login-note" class="hidden text-[11px] text-slate-500 bg-slate-900 rounded-lg p-2.5">
+            Sem login IXC cadastrado — não é possível verificar ou marcar status online/offline. Este equipamento sempre aparece como "Sem Status".
+          </p>
+          <div id="d-status-actions" class="grid grid-cols-2 gap-2">
             <button id="btn-mark-online" class="px-3 py-2 rounded-lg bg-emerald-700/40 hover:bg-emerald-700/60 border border-emerald-700 text-emerald-300 text-xs font-medium">Marcar Online</button>
             <button id="btn-mark-offline" class="px-3 py-2 rounded-lg bg-red-700/40 hover:bg-red-700/60 border border-red-700 text-red-300 text-xs font-medium">Marcar Offline</button>
           </div>
@@ -465,6 +468,7 @@
       </div>
       <input id="list-search" type="text" placeholder="Buscar por etiqueta, MAC ou patrimônio..."
         class="mx-4 mt-3 mb-1 rounded-lg bg-slate-900 border border-slate-600 px-3 py-2 text-sm w-[calc(100%-2rem)] focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+      <div id="list-filter-tabs" class="flex items-center gap-1.5 mx-4 mt-2 mb-1"></div>
       <ul id="list-items" class="p-4 pt-2 space-y-2 text-sm"></ul>
     </div>
   </div>

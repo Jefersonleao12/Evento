@@ -456,6 +456,20 @@ app.patch('/api/onts/:id/status', (req, res) => {
   if (!['online', 'offline', 'unknown'].includes(status)) {
     return res.status(400).json({ error: "status deve ser 'online', 'offline' ou 'unknown'." });
   }
+
+  const existing = db.prepare('SELECT ixc_login_id FROM onts WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Equipamento não encontrado.' });
+
+  // Sem login cadastrado no IXC não há como confirmar online/offline de
+  // verdade — força permanecer "sem status" em vez de deixar marcar
+  // manualmente (evita contagens de offline que não refletem a realidade).
+  const hasLogin = Boolean(existing.ixc_login_id && existing.ixc_login_id.trim());
+  if (!hasLogin && status !== 'unknown') {
+    return res.status(400).json({
+      error: 'Este equipamento não tem login IXC cadastrado — não é possível marcar como online/offline.',
+    });
+  }
+
   const result = db.prepare(
     `UPDATE onts SET status = ?, last_checked_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
   ).run(status, req.params.id);
@@ -570,10 +584,15 @@ app.get('/api/reports/wifi', requireAdmin, (req, res) => {
 /* ==================================================================== *
  * ROTA - ESTATÍSTICAS (resumo para dashboard/header)
  * ==================================================================== */
+// Equipamentos sem login IXC nunca contam como online/offline — não há
+// como confirmar status real deles, então sempre entram em "sem status"
+// (mesmo critério usado no PATCH /status e no frontend).
+const HAS_LOGIN_SQL = `(ixc_login_id IS NOT NULL AND TRIM(ixc_login_id) != '')`;
+
 app.get('/api/stats', (req, res) => {
   const total = db.prepare('SELECT COUNT(*) AS c FROM onts').get().c;
-  const online = db.prepare(`SELECT COUNT(*) AS c FROM onts WHERE status = 'online'`).get().c;
-  const offline = db.prepare(`SELECT COUNT(*) AS c FROM onts WHERE status = 'offline'`).get().c;
+  const online = db.prepare(`SELECT COUNT(*) AS c FROM onts WHERE status = 'online' AND ${HAS_LOGIN_SQL}`).get().c;
+  const offline = db.prepare(`SELECT COUNT(*) AS c FROM onts WHERE status = 'offline' AND ${HAS_LOGIN_SQL}`).get().c;
   const unknown = total - online - offline;
   res.json({ total, online, offline, unknown });
 });

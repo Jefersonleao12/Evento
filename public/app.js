@@ -38,6 +38,7 @@
     pendingClickLatLng: null, // ponto clicado aguardando confirmação no formulário
     pendingFixedPos: null, // posição travada ao adicionar equipamento no mesmo local de outro já existente
     activePickerPos: null, // posição do grupo atualmente aberto no seletor de equipamentos empilhados
+    listStatusFilter: 'all', // filtro ativo no painel de listagem: all | online | offline | unknown
     currentUser: null, // { id, username, role }
     movingOntId: null, // id do equipamento atualmente em modo "mover no mapa"
     autoRefreshTimer: null,
@@ -48,6 +49,9 @@
   const DEFAULT_OSM_CENTER = [-15.793889, -47.882778]; // Brasília, ajuste conforme o local do evento
   const DEFAULT_OSM_ZOOM = 18;
   const AUTO_REFRESH_MS = 60 * 1000; // auto-atualização do status via IXC
+  // Zoom aplicado ao selecionar um equipamento na lista/busca — bem próximo,
+  // pra achar o equipamento na hora em vez de só centralizar no zoom atual.
+  const CLOSE_ZOOM = { floorplan: 3, osm: 19 };
 
   // Ícone de roteador (duas antenas) usado para equipamentos do tipo ONT,
   // no lugar do emoji genérico — SVG embutido para não depender de arquivo
@@ -344,7 +348,7 @@
   }
 
   function markerIcon(ont) {
-    const statusClass = `status-${ont.status || 'unknown'}`;
+    const statusClass = `status-${effectiveStatus(ont)}`;
     const label = ont.nome_fantasia ? escapeHtml(ont.nome_fantasia) : '';
     const draggingClass = state.movingOntId === ont.id ? 'dragging' : '';
     const customUrl = state.customIcons[ont.equipment_type];
@@ -527,7 +531,7 @@
       .map(
         (o) => `
       <li data-id="${o.id}" class="cursor-pointer bg-slate-900 hover:bg-slate-700/60 rounded-lg p-3 flex items-center gap-3">
-        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[o.status] || dotClass.unknown}"></span>
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[effectiveStatus(o)]}"></span>
         <div class="min-w-0 flex-1">
           <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 16)} ${escapeHtml(o.tag_label)}</p>
           <p class="text-[11px] text-slate-500 truncate">${escapeHtml(EQUIPMENT_LABELS[o.equipment_type] || '')}${o.nome_fantasia ? ' • ' + escapeHtml(o.nome_fantasia) : ''}</p>
@@ -555,7 +559,17 @@
    * ==================================================================== */
 
   function statusLabel(status) {
-    return { online: 'Online', offline: 'Offline', unknown: 'Sem dados' }[status] || 'Sem dados';
+    return { online: 'Online', offline: 'Offline', unknown: 'Sem Status' }[status] || 'Sem Status';
+  }
+
+  function hasIxcLogin(ont) {
+    return Boolean(ont.ixc_login_id && ont.ixc_login_id.trim());
+  }
+
+  // Sem login IXC não há como confirmar status real — sempre "sem status"
+  // na exibição, mesmo que algum valor antigo tenha ficado salvo no banco.
+  function effectiveStatus(ont) {
+    return hasIxcLogin(ont) ? ont.status || 'unknown' : 'unknown';
   }
 
   function openDrawer(ontId) {
@@ -568,12 +582,13 @@
     $('#d-title').innerHTML =
       `<span class="inline-flex items-center align-middle">${equipmentIconHtml(ont.equipment_type, 16)}</span> ${escapeHtml(ont.tag_label)}`.trim();
     $('#d-nome-fantasia').textContent = ont.nome_fantasia || '';
+    const status = effectiveStatus(ont);
     $('#d-status-dot').className =
       'w-2.5 h-2.5 rounded-full shrink-0 ' +
-      { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500' }[ont.status || 'unknown'];
+      { online: 'bg-emerald-500', offline: 'bg-red-500', unknown: 'bg-gray-500' }[status];
     $('#d-equipment-type').textContent = EQUIPMENT_LABELS[ont.equipment_type] || EQUIPMENT_LABELS.ont;
     $('#d-asset').textContent = ont.asset_number || '—';
-    $('#d-status-text').textContent = statusLabel(ont.status);
+    $('#d-status-text').textContent = statusLabel(status);
     $('#d-mac').textContent = ont.mac_address || '—';
     $('#d-ssid').textContent = ont.wifi_ssid || '—';
     $('#d-password').textContent = '••••••••';
@@ -582,6 +597,13 @@
     $('#d-ixc').textContent = ont.ixc_login_id || '—';
     $('#d-notes').textContent = ont.notes || '—';
     updateLastCheckText();
+
+    // Sem login IXC: esconde ações de marcar/consultar status manualmente
+    // e mostra um aviso explicando o porquê.
+    const hasLogin = hasIxcLogin(ont);
+    $('#d-status-actions').classList.toggle('hidden', !hasLogin);
+    $('#btn-check-ixc').classList.toggle('hidden', !hasLogin);
+    $('#d-no-login-note').classList.toggle('hidden', hasLogin);
 
     const moving = state.movingOntId === ont.id;
     $('#btn-toggle-move-label').textContent = moving ? 'Fixar posição' : 'Mover no mapa';
@@ -940,6 +962,8 @@
    * ==================================================================== */
 
   function openListPanel() {
+    state.listStatusFilter = 'all';
+    renderListFilterTabs();
     renderListItems('');
     $('#list-panel').classList.remove('hidden');
     $('#list-search').value = '';
@@ -950,9 +974,37 @@
     $('#list-panel').classList.add('hidden');
   }
 
+  const LIST_STATUS_FILTERS = [
+    { key: 'all', label: 'Todos' },
+    { key: 'online', label: 'Online' },
+    { key: 'offline', label: 'Offline' },
+    { key: 'unknown', label: 'Sem Status' },
+  ];
+
+  function renderListFilterTabs() {
+    $('#list-filter-tabs').innerHTML = LIST_STATUS_FILTERS.map((f) => {
+      const active = state.listStatusFilter === f.key;
+      return `<button type="button" data-filter="${f.key}" class="px-2.5 py-1 rounded-full text-[11px] font-medium border ${
+        active
+          ? 'bg-emerald-600 border-emerald-600 text-white'
+          : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
+      }">${f.label}</button>`;
+    }).join('');
+
+    $$('#list-filter-tabs [data-filter]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.listStatusFilter = btn.dataset.filter;
+        renderListFilterTabs();
+        renderListItems($('#list-search').value);
+      });
+    });
+  }
+
   function renderListItems(filter) {
     const term = filter.trim().toLowerCase();
+    const statusFilter = state.listStatusFilter || 'all';
     const filtered = state.onts.filter((o) => {
+      if (statusFilter !== 'all' && effectiveStatus(o) !== statusFilter) return false;
       if (!term) return true;
       return [o.tag_label, o.mac_address, o.asset_number, o.ixc_login_id, o.nome_fantasia]
         .filter(Boolean)
@@ -969,7 +1021,7 @@
           <p class="font-medium truncate">${equipmentIconHtml(o.equipment_type, 14)} ${escapeHtml(o.tag_label)}${o.nome_fantasia ? ' — ' + escapeHtml(o.nome_fantasia) : ''}</p>
           <p class="text-[11px] text-slate-500 truncate">${escapeHtml(o.asset_number || 'sem patrimônio')} • ${escapeHtml(o.mac_address || 'sem MAC')} • ${escapeHtml(timeAgo(o.last_checked_at) || 'nunca verificado')}</p>
         </div>
-        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[o.status] || dotClass.unknown}"></span>
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${dotClass[effectiveStatus(o)]}"></span>
       </li>`
       )
       .join('') || `<li class="text-slate-500 text-center py-6 text-xs">Nenhum equipamento encontrado.</li>`;
@@ -980,7 +1032,8 @@
         closeListPanel();
         const ont = state.onts.find((o) => o.id === id);
         if (ont) {
-          state.map.setView(posToLatLng(ont), state.map.getZoom());
+          const closeZoom = CLOSE_ZOOM[state.mode] ?? CLOSE_ZOOM.osm;
+          state.map.setView(posToLatLng(ont), Math.max(state.map.getZoom(), closeZoom));
           openDrawer(id);
         }
       });
