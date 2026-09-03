@@ -28,11 +28,15 @@ const axios = require('axios');
 const baseUrl = (process.env.IXC_BASE_URL || '').replace(/\/+$/, '');
 const token = process.env.IXC_TOKEN || '';
 
+// Token no formato "id:hash" (versões novas do IXC) já é o par usuário:senha
+// do Basic Auth — não duplicar. Token opaco (sem ":") duplica como antes.
+const basicAuthPair = token.includes(':') ? token : `${token}:${token}`;
+
 const client = axios.create({
   baseURL: baseUrl,
   timeout: 15000,
   headers: {
-    Authorization: 'Basic ' + Buffer.from(`${token}:${token}`).toString('base64'),
+    Authorization: 'Basic ' + Buffer.from(basicAuthPair).toString('base64'),
     'Content-Type': 'application/json',
     ixcsoft: 'listar',
   },

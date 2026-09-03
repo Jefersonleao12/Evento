@@ -32,6 +32,21 @@ const IXC_TOKEN = process.env.IXC_TOKEN || '';
  * Aceita overrides (baseUrl/token) vindos do banco de configurações,
  * caso o técnico prefira configurar pela interface web em vez do .env.
  */
+// Monta o header Basic Auth do token do IXC. Existem dois formatos de
+// token nas instalações do IXC:
+//   - Token único (opaco): usuário e senha do Basic Auth são o mesmo
+//     valor repetido ("token:token").
+//   - Token no formato "id:hash" (comum em versões mais novas — o ID da
+//     chave de API já vem junto, separado por ":"): usado como está,
+//     SEM duplicar, já que ele já é o par "usuário:senha".
+// Usar o formato errado gera uma autenticação inválida — o Nginx recusa
+// com "401 Authorization Required" antes mesmo de chegar na aplicação
+// do IXC, o que pode parecer (mas não é) um bloqueio de proxy.
+function buildAuthHeader(authToken) {
+  const basicAuthPair = authToken.includes(':') ? authToken : `${authToken}:${authToken}`;
+  return 'Basic ' + Buffer.from(basicAuthPair).toString('base64');
+}
+
 function buildClient({ baseUrl, token } = {}) {
   const url = (baseUrl || IXC_BASE_URL || '').replace(/\/+$/, '');
   const authToken = token || IXC_TOKEN;
@@ -44,8 +59,7 @@ function buildClient({ baseUrl, token } = {}) {
     baseURL: url,
     timeout: 8000,
     headers: {
-      // Autenticação Basic com o token do IXC (usuário e senha = token).
-      Authorization: 'Basic ' + Buffer.from(`${authToken}:${authToken}`).toString('base64'),
+      Authorization: buildAuthHeader(authToken),
       'Content-Type': 'application/json',
       ixcsoft: 'listar',
     },
