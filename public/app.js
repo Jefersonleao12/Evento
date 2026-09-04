@@ -616,8 +616,10 @@
     const hasLogin = hasIxcLogin(ont);
     $('#d-status-actions').classList.toggle('hidden', !hasLogin);
     $('#btn-check-ixc').classList.toggle('hidden', !hasLogin);
+    $('#btn-check-power').classList.toggle('hidden', !hasLogin);
     $('#btn-access-device').classList.toggle('hidden', !hasLogin);
     $('#d-no-login-note').classList.toggle('hidden', hasLogin);
+    $('#d-power-box').classList.add('hidden'); // só mostra de novo quando o usuário pedir
 
     // Retirado para o almoxarifado: mostra quem retirou e quando, troca o
     // botão "Retirar Equipamento" por "Devolver ao local".
@@ -695,6 +697,49 @@
     } catch (err) {
       showToast('Erro ao consultar IXC: ' + err.message, true);
     }
+  }
+
+  // Consulta ao vivo a potência/sinal da ONU (Sinal Rx/Tx, Temperatura,
+  // Voltagem) no IXC — só existe para equipamentos numa ONU de fibra
+  // monitorada; não é salva no banco, é um diagnóstico pontual.
+  async function checkActiveOntPower() {
+    if (!state.activeOntId) return;
+    showToast('Consultando potência da ONU...');
+    try {
+      const result = await api(`/api/onts/${state.activeOntId}/power`, { method: 'POST' });
+      renderPowerBox(result);
+    } catch (err) {
+      showToast('Erro ao consultar potência: ' + err.message, true);
+    }
+  }
+
+  function renderPowerBox(result) {
+    $('#d-power-box').classList.remove('hidden');
+    $('#d-power-time').textContent = 'agora';
+
+    if (!result.ok) {
+      $('#d-power-grid').innerHTML = '';
+      $('#d-power-error').textContent = result.error || 'Não foi possível consultar a potência.';
+      $('#d-power-error').classList.remove('hidden');
+      return;
+    }
+
+    $('#d-power-error').classList.add('hidden');
+    const fields = [
+      ['Sinal Rx', result.sinalRx !== null ? `${result.sinalRx} dBm` : '—'],
+      ['Sinal Tx', result.sinalTx !== null ? `${result.sinalTx} dBm` : '—'],
+      ['Temperatura', result.temperatura !== null ? `${result.temperatura} °C` : '—'],
+      ['Voltagem', result.voltagem !== null ? `${result.voltagem} V` : '—'],
+    ];
+    $('#d-power-grid').innerHTML = fields
+      .map(
+        ([label, value]) => `
+      <div>
+        <p class="text-slate-500">${label}</p>
+        <p class="font-mono">${escapeHtml(String(value))}</p>
+      </div>`
+      )
+      .join('');
   }
 
   // Consulta o IP atual do login no IXC (na hora, nunca um valor salvo —
@@ -1237,6 +1282,7 @@
     $('#btn-mark-online').addEventListener('click', () => setActiveOntStatus('online'));
     $('#btn-mark-offline').addEventListener('click', () => setActiveOntStatus('offline'));
     $('#btn-check-ixc').addEventListener('click', checkActiveOntOnIxc);
+    $('#btn-check-power').addEventListener('click', checkActiveOntPower);
     $('#btn-access-device').addEventListener('click', accessActiveDevice);
     $('#btn-retirar').addEventListener('click', retirarActiveOnt);
     $('#btn-devolver').addEventListener('click', devolverActiveOnt);

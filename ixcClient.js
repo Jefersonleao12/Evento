@@ -154,6 +154,84 @@ async function checkOntStatus(ixcLoginId, config = {}) {
 }
 
 /**
+ * Consulta a potência/sinal da ONU (Sinal Rx/Tx, Temperatura, Voltagem)
+ * associada a um login, via a tabela "radpop_radio_cliente_fibra" — módulo
+ * de monitoramento de fibra (RadPOP) integrado ao IXC. Só existe dado
+ * quando o equipamento está numa ONU GPON monitorada; equipamentos ligados
+ * de outra forma (Wi-Fi, Ethernet direto, 4G) não têm esse registro.
+ *
+ * Diferente do status online/offline (tabela radusuarios), aqui é preciso
+ * primeiro descobrir o ID interno do login (radusuarios.id) — a consulta à
+ * tabela radpop usa esse ID, não o texto do login.
+ *
+ * Retorna:
+ *   { ok: true, sinalRx, sinalTx, temperatura, voltagem, onuNumero, mac, distanciaOnu, raw }
+ *   ou { ok: false, error }
+ */
+async function getOnuPower(ixcLoginId, config = {}) {
+  if (!ixcLoginId) {
+    return { ok: false, error: 'ixc_login_id não informado' };
+  }
+
+  const client = buildClient(config);
+  if (!client) {
+    return { ok: false, error: 'Integração IXC não configurada (defina IXC_BASE_URL e IXC_TOKEN)' };
+  }
+
+  try {
+    // 1) Descobre o ID interno do login (radusuarios.id) a partir do texto do login.
+    const loginResponse = await postWithRetry(client, '/webservice/v1/radusuarios', {
+      qtype: 'radusuarios.login',
+      query: ixcLoginId,
+      oper: '=',
+      page: '1',
+      rp: '1',
+      sortname: 'radusuarios.id',
+      sortorder: 'desc',
+    });
+    const loginRegistros = loginResponse.data && loginResponse.data.registros;
+    if (!Array.isArray(loginRegistros) || loginRegistros.length === 0) {
+      return { ok: false, error: 'Login não encontrado no IXC' };
+    }
+    const radiusId = loginRegistros[0].id;
+    if (!radiusId) {
+      return { ok: false, error: 'Não foi possível obter o ID interno do login no IXC' };
+    }
+
+    // 2) Busca o registro de potência da ONU vinculado a esse ID.
+    const powerResponse = await postWithRetry(client, '/webservice/v1/radpop_radio_cliente_fibra', {
+      qtype: 'radpop_radio_cliente_fibra.id_login',
+      query: String(radiusId),
+      oper: '=',
+      page: '1',
+      rp: '1',
+    });
+    const powerRegistros = powerResponse.data && powerResponse.data.registros;
+    if (!Array.isArray(powerRegistros) || powerRegistros.length === 0) {
+      return { ok: false, error: 'Sem dados de potência de ONU para este equipamento (não está numa ONU de fibra monitorada).' };
+    }
+
+    const r = powerRegistros[0];
+    const toNumberOrNull = (v) => (v === undefined || v === null || v === '' ? null : Number(v));
+
+    return {
+      ok: true,
+      sinalRx: toNumberOrNull(r.sinal_rx),
+      sinalTx: toNumberOrNull(r.sinal_tx),
+      temperatura: toNumberOrNull(r.temperatura),
+      voltagem: toNumberOrNull(r.voltagem),
+      onuNumero: r.onu_numero || null,
+      mac: r.mac || null,
+      distanciaOnu: r.distancia_onu || null,
+      raw: r,
+    };
+  } catch (err) {
+    console.error('[ixcClient] Erro ao consultar potência da ONU:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+/**
  * Testa a conectividade/credenciais configuradas contra o IXC.
  * Útil para um botão "Testar conexão" na tela de configurações.
  */
@@ -178,5 +256,6 @@ async function testConnection(config = {}) {
 
 module.exports = {
   checkOntStatus,
+  getOnuPower,
   testConnection,
 };

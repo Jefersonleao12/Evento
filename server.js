@@ -576,6 +576,25 @@ app.post('/api/onts/:id/check-status', ixcCheckLimiter, async (req, res) => {
   res.json({ ont: updated, ixc: result });
 });
 
+// Consulta a potência/sinal da ONU (Sinal Rx/Tx, Temperatura, Voltagem) no
+// IXC — consulta ao vivo, não fica salva no banco (é diagnóstico pontual,
+// diferente do status online/offline que é monitorado o tempo todo).
+app.post('/api/onts/:id/power', ixcCheckLimiter, async (req, res) => {
+  const ont = db.prepare('SELECT id, ixc_login_id FROM onts WHERE id = ?').get(req.params.id);
+  if (!ont) return res.status(404).json({ error: 'Equipamento não encontrado.' });
+  if (!ont.ixc_login_id || !ont.ixc_login_id.trim()) {
+    return res.status(400).json({ error: 'Este equipamento não tem login IXC cadastrado.' });
+  }
+
+  const ixcConfig = {
+    baseUrl: getSetting('ixc_base_url'),
+    token: getSetting('ixc_token'),
+  };
+
+  const result = await ixcClient.getOnuPower(ont.ixc_login_id, ixcConfig);
+  res.json(result);
+});
+
 // Pequena pausa entre chamadas sequenciais ao IXC, para não sobrecarregar a
 // API do provedor quando o evento tiver muitos equipamentos cadastrados.
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
