@@ -715,13 +715,33 @@
   // monitorada; não é salva no banco, é um diagnóstico pontual.
   async function checkActiveOntPower() {
     if (!state.activeOntId) return;
-    showToast('Consultando potência da ONU...');
+    const ontId = state.activeOntId;
+    showPowerBoxLoading();
     try {
-      const result = await api(`/api/onts/${state.activeOntId}/power`, { method: 'POST' });
+      const result = await api(`/api/onts/${ontId}/power`, { method: 'POST' });
+      // Se o usuário trocou de equipamento enquanto a consulta rodava
+      // (pode levar vários segundos na consulta ao vivo), ignora o
+      // resultado — não é mais o equipamento que está aberto no drawer.
+      if (state.activeOntId !== ontId) return;
       renderPowerBox(result);
     } catch (err) {
-      showToast('Erro ao consultar potência: ' + err.message, true);
+      if (state.activeOntId !== ontId) return;
+      renderPowerBox({ ok: false, error: err.message });
     }
+  }
+
+  // Mostra a caixinha de potência já com um spinner, em vez de deixar o
+  // usuário sem feedback nenhum enquanto a consulta ao vivo roda (pode
+  // levar alguns segundos — é uma consulta real na OLT, não instantânea).
+  function showPowerBoxLoading() {
+    $('#d-power-box').classList.remove('hidden');
+    $('#d-power-time').textContent = '';
+    $('#d-power-error').classList.add('hidden');
+    $('#d-power-grid').innerHTML = `
+      <div class="col-span-2 flex items-center gap-2 text-slate-400 py-1">
+        <svg class="w-4 h-4 animate-spin shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" d="M12 3a9 9 0 100 18 9 9 0 000-18z" opacity=".25"/><path stroke-linecap="round" d="M12 3a9 9 0 019 9"/></svg>
+        Consultando potência...
+      </div>`;
   }
 
   function renderPowerBox(result) {
