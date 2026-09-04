@@ -63,14 +63,18 @@ async function login(baseUrl, email, password) {
   form1.append('email', email);
   const r1 = await s.client.post('/api-module/auth/login', form1, { headers: form1.getHeaders() });
   if (!(r1.status === 200 && r1.data && r1.data.data && r1.data.data.type === 'password')) {
-    throw new Error('E-mail de admin do IXC não reconhecido (ou o fluxo de login mudou).');
+    throw new Error(
+      `E-mail de admin do IXC não reconhecido (ou o fluxo de login mudou). Resposta do IXC (status ${r1.status}): ${JSON.stringify(r1.data)}`
+    );
   }
 
   const form2 = new FormData();
   form2.append('password', password);
   const r2 = await s.client.post('/api-module/auth/login', form2, { headers: form2.getHeaders() });
   if (!(r2.status === 200 && r2.data && r2.data.data && r2.data.data.type === 'redirect')) {
-    throw new Error('Senha de admin do IXC incorreta (ou o fluxo de login mudou).');
+    throw new Error(
+      `Senha de admin do IXC incorreta (ou o fluxo de login mudou). Resposta do IXC (status ${r2.status}): ${JSON.stringify(r2.data)}`
+    );
   }
 
   s.loggedIn = true;
