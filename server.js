@@ -32,6 +32,7 @@ const sharp = require('sharp');
 
 const { db, initDatabase, getSetting, setSetting, findUserByUsername } = require('./database');
 const ixcClient = require('./ixcClient');
+const radpopClient = require('./radpopClient');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -601,8 +602,29 @@ app.post('/api/onts/:id/power', ixcCheckLimiter, async (req, res) => {
     token: getSetting('ixc_token'),
   };
 
-  const result = await ixcClient.getOnuPower(ont.ixc_login_id, ixcConfig);
-  res.json(result);
+  const cached = await ixcClient.getOnuPower(ont.ixc_login_id, ixcConfig);
+  if (!cached.ok || !cached.onuRecordId) {
+    return res.json(cached);
+  }
+
+  // Se houver credenciais de admin configuradas, tenta a consulta AO VIVO
+  // (simula o botão "Potência/Resumo" do IXC) — bem mais lenta (alguns
+  // segundos, consulta real na OLT), mas reflete o estado atual de verdade.
+  // Se não estiver configurado ou falhar, cai de volta pro valor em cache.
+  const adminEmail = process.env.IXC_ADMIN_EMAIL;
+  const adminPassword = process.env.IXC_ADMIN_PASSWORD;
+  if (adminEmail && adminPassword) {
+    const live = await radpopClient.getLivePower({
+      baseUrl: ixcConfig.baseUrl || process.env.IXC_BASE_URL,
+      adminEmail,
+      adminPassword,
+      onuRecordId: cached.onuRecordId,
+    });
+    if (live.ok) return res.json(live);
+    console.warn('[radpop] Consulta ao vivo falhou, usando valor em cache:', live.error);
+  }
+
+  res.json(cached);
 });
 
 // Pequena pausa entre chamadas sequenciais ao IXC, para não sobrecarregar a

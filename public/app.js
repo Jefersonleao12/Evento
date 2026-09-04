@@ -726,7 +726,7 @@
 
   function renderPowerBox(result) {
     $('#d-power-box').classList.remove('hidden');
-    $('#d-power-time').textContent = 'agora';
+    $('#d-power-time').textContent = result.live ? 'ao vivo agora' : 'em cache (não é ao vivo)';
 
     if (!result.ok) {
       $('#d-power-grid').innerHTML = '';
@@ -742,6 +742,12 @@
       ['Temperatura', result.temperatura !== null ? `${result.temperatura} °C` : '—'],
       ['Voltagem', result.voltagem !== null ? `${result.voltagem} V` : '—'],
     ];
+    if (result.live) {
+      fields.push(['Status potência', result.statusPotencia || (result.onlineNow === false ? 'ONU offline' : '—')]);
+      if (result.onlineNow === false && result.causaUltimaQueda) {
+        fields.push(['Causa da última queda', result.causaUltimaQueda]);
+      }
+    }
     $('#d-power-grid').innerHTML = fields
       .map(
         ([label, value]) => `

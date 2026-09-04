@@ -216,6 +216,8 @@ async function getOnuPower(ixcLoginId, config = {}) {
 
     return {
       ok: true,
+      live: false,
+      onuRecordId: r.id || null, // id da tabela radpop_radio_cliente_fibra — usado pra consulta ao vivo (ver radpopClient.js)
       sinalRx: toNumberOrNull(r.sinal_rx),
       sinalTx: toNumberOrNull(r.sinal_tx),
       temperatura: toNumberOrNull(r.temperatura),
