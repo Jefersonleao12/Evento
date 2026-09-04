@@ -103,9 +103,19 @@ function requireAuth(req, res, next) {
   return res.status(401).json({ error: 'Não autenticado.' });
 }
 
+// "owner" é um admin com privilégios extras (ver requireOwner) — por isso
+// conta como admin em toda ação que já era restrita a admin.
 function requireAdmin(req, res, next) {
-  if (req.session && req.session.user && req.session.user.role === 'admin') return next();
+  const role = req.session && req.session.user && req.session.user.role;
+  if (role === 'admin' || role === 'owner') return next();
   return res.status(403).json({ error: 'Ação restrita ao administrador.' });
+}
+
+// Reservado para ações restritas a um único usuário (ex.: carregar planta
+// baixa e ícones dos equipamentos) — nem todo admin deve poder trocar isso.
+function requireOwner(req, res, next) {
+  if (req.session && req.session.user && req.session.user.role === 'owner') return next();
+  return res.status(403).json({ error: 'Ação restrita ao proprietário do painel.' });
 }
 
 /* ==================================================================== *
@@ -230,7 +240,7 @@ app.get('/api/floorplan', (req, res) => {
 // esse uso e reduz drasticamente o tamanho do arquivo.
 const FLOORPLAN_MAX_DIMENSION = 2400;
 
-app.post('/api/floorplan', requireAdmin, upload.single('floorplan'), async (req, res, next) => {
+app.post('/api/floorplan', requireOwner, upload.single('floorplan'), async (req, res, next) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
   }
@@ -317,7 +327,7 @@ app.get('/api/equipment-icons', (req, res) => {
 });
 
 // Envia/substitui o ícone customizado de um tipo de equipamento. Admin apenas.
-app.post('/api/equipment-icons/:type', requireAdmin, (req, res, next) => {
+app.post('/api/equipment-icons/:type', requireOwner, (req, res, next) => {
   if (!EQUIPMENT_TYPES.includes(req.params.type)) {
     return res.status(400).json({ error: 'Tipo de equipamento inválido.' });
   }
@@ -332,7 +342,7 @@ app.post('/api/equipment-icons/:type', requireAdmin, (req, res, next) => {
 });
 
 // Remove o ícone customizado de um tipo, voltando a usar o padrão. Admin apenas.
-app.delete('/api/equipment-icons/:type', requireAdmin, (req, res) => {
+app.delete('/api/equipment-icons/:type', requireOwner, (req, res) => {
   if (!EQUIPMENT_TYPES.includes(req.params.type)) {
     return res.status(400).json({ error: 'Tipo de equipamento inválido.' });
   }

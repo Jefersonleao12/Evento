@@ -101,8 +101,18 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => document.querySelectorAll(sel);
 
+  // "owner" é um admin com privilégios extras (ver isOwner) — por isso
+  // conta como admin em toda ação que já era restrita a admin.
   function isAdmin() {
-    return Boolean(state.currentUser && state.currentUser.role === 'admin');
+    return Boolean(
+      state.currentUser && (state.currentUser.role === 'admin' || state.currentUser.role === 'owner')
+    );
+  }
+
+  // Reservado pra ações restritas a um único usuário (carregar planta
+  // baixa e trocar ícones dos equipamentos).
+  function isOwner() {
+    return Boolean(state.currentUser && state.currentUser.role === 'owner');
   }
 
   function showToast(msg, isError = false) {
@@ -174,6 +184,7 @@
 
   function applyRoleVisibility() {
     $$('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdmin()));
+    $$('.owner-only').forEach((el) => el.classList.toggle('hidden', !isOwner()));
   }
 
   async function showApp() {
@@ -977,7 +988,7 @@
    * ==================================================================== */
 
   function handlePlantFileSelected(e) {
-    if (!isAdmin()) return;
+    if (!isOwner()) return;
     const file = e.target.files[0];
     if (!file) return;
 
@@ -1018,7 +1029,7 @@
   }
 
   function openIconsModal() {
-    if (!isAdmin()) return;
+    if (!isOwner()) return;
     renderIconsList();
     $('#icons-modal').classList.remove('hidden');
   }

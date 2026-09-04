@@ -6,11 +6,13 @@
  * de usuários na interface.
  *
  * Uso:
- *   node scripts/create-user.js <usuario> <senha> [admin|viewer]
+ *   node scripts/create-user.js <usuario> <senha> [admin|viewer|owner]
  *
  * Role padrão: admin.
- *   - admin  → cadastra, edita, remove e move equipamentos; troca a
- *              planta baixa; gerencia ícones e configurações do IXC.
+ *   - owner  → tudo que o admin pode, mais carregar planta baixa e trocar
+ *              os ícones dos equipamentos (reservado a um usuário só).
+ *   - admin  → cadastra, edita, remove e move equipamentos; configurações
+ *              do IXC. NÃO pode trocar planta baixa nem ícones (owner só).
  *   - viewer → só visualiza o mapa, marca status manualmente e consulta
  *              o IXC (não pode alterar cadastro nem posição).
  *
@@ -27,11 +29,11 @@ const [, , username, password, roleArg] = process.argv;
 const role = roleArg || 'admin';
 
 if (!username || !password) {
-  console.error('Uso: node scripts/create-user.js <usuario> <senha> [admin|viewer]');
+  console.error('Uso: node scripts/create-user.js <usuario> <senha> [admin|viewer|owner]');
   process.exit(1);
 }
-if (!['admin', 'viewer'].includes(role)) {
-  console.error('Role inválido — use "admin" ou "viewer".');
+if (!['admin', 'viewer', 'owner'].includes(role)) {
+  console.error('Role inválido — use "admin", "viewer" ou "owner".');
   process.exit(1);
 }
 if (password.length < 6) {
